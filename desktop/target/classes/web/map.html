@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HAVEN Map</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Animated pulse marker - using red color to match UI */
+        .pulse-marker {
+            border-radius: 50%;
+            background-color: #ff0000; /* Red color to match UI */
+            animation: 1.5s pulse infinite ease-in-out;
+            cursor: pointer;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); /* Red color */
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); /* Red color */
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); /* Red color */
+            }
+        }
+        
+        /* Highlighted marker - darker red for contrast */
+        .highlighted-marker {
+            background-color: #cc0000; /* Darker red */
+            animation: 1.5s highlight-pulse infinite ease-in-out;
+        }
+        
+        @keyframes highlight-pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.7); /* Darker red */
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(204, 0, 0, 0); /* Darker red */
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(204, 0, 0, 0); /* Darker red */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // Initialize map
+        var map = L.map('map').setView([10.6765, 122.9509], 15);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        var markers = {};
+        
+        // Create custom icon with pulse effect
+        function createPulseIcon(highlighted) {
+            var className = highlighted ? 'pulse-marker highlighted-marker' : 'pulse-marker';
+            return L.divIcon({
+                className: className,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+        }
+        
+        // Add marker function (called from Java)
+        function addMarker(lat, lng, title, highlight) {
+            var icon = createPulseIcon(highlight);
+            var marker = L.marker([lat, lng], {icon: icon}).addTo(map)
+                .bindPopup(title);
+            
+            var id = 'marker_' + lat + '_' + lng;
+            markers[id] = marker;
+            
+            if (highlight) {
+                marker.openPopup();
+            }
+            
+            return id;
+        }
+        
+        // Center on location function (called from Java)
+        function centerOn(lat, lng) {
+            map.setView([lat, lng], 16);
+        }
+        
+        // Highlight marker function (called from Java)
+        function highlightMarker(lat, lng) {
+            var id = 'marker_' + lat + '_' + lng;
+            if (markers[id]) {
+                markers[id].openPopup();
+            }
+        }
+    </script>
+</body>
+</html>

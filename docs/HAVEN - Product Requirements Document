@@ -1,0 +1,499 @@
+HAVEN: Pet Emergency Response System
+Product Requirements Document (PRD)
+
+Product Overview
+HAVEN is an integrated mobile and desktop emergency response system designed specifically for pet-related emergencies. The system connects pet owners to local emergency response units, veterinarians, and animal rescue organizations in real time.
+It consists of two main components:
+Mobile Application (User Side): Used by pet owners to send one-click emergency alerts or detailed incident reports.
+
+
+Desktop Application (Response Unit Side): Used by emergency response teams, animal welfare officers, and partnered veterinarians to receive, track, and respond to alerts.
+
+
+HAVEN aims to provide faster, more coordinated, and transparent pet emergency responses across communities.
+
+Core Concept
+When a pet owner encounters an emergency (such as injury, heatstroke, animal attack, or distress), they can press the big red emergency button on the HAVEN mobile app. This immediately sends a real-time alert to the emergency response unit’s desktop dashboard, pinpointing the user’s location and contact details.
+Responders can then:
+View the alert on a live interactive map, represented as a pulsing red dot.
+
+
+Access the pet owner’s profile for quick contact and verification.
+
+
+Dispatch field responders or coordinate with nearby veterinary clinics.
+
+
+The system also includes an emergency form for non-critical incidents (e.g., lost pets, minor injuries, or animal rescues), and a live map accessible to users for awareness of ongoing pet emergencies within their vicinity.
+
+Target Users
+Pet owners and animal caregivers
+
+
+Veterinary clinics and hospitals
+
+
+Animal control and rescue units
+
+
+Local barangay animal response teams
+
+
+Pet welfare NGOs and government animal bureaus
+
+
+
+Objectives
+Create a centralized and digital emergency response network for pets.
+
+
+Minimize response time by automating alerts with precise GPS data.
+
+
+Provide real-time situational awareness through mapping and alert visualization.
+
+
+Establish data-driven insights for future pet welfare and safety initiatives.
+
+
+
+Key Features
+Mobile Application (User Side)
+Account Creation and Verification: Users register with contact details, pet information, and address.
+
+
+One-Tap Emergency Button: Instantly alerts the emergency response unit with real-time GPS coordinates.
+
+
+Emergency Form Submission: Allows users to file detailed reports for non-critical incidents.
+
+
+Live Map View: Displays ongoing emergency activity and nearby rescue operations.
+
+
+Notification System: Provides updates when responders are dispatched or arrive on-site.
+
+
+Desktop Application (Response Unit Side)
+Real-Time Live Map Dashboard: Displays pulsing red dots for reported emergencies within the unit’s area of responsibility.
+
+
+User Profiling Page: Stores data of registered pet owners, including contact and emergency history.
+
+
+Incident Log System: Automatically records all emergency reports for documentation and analytics.
+
+
+Response Monitoring Dashboard: Shows statistics such as response times, case frequency, and resolved cases.
+
+
+Communication Interface: Enables responders to contact the reporting pet owner directly via integrated call or message functions.
+
+
+
+System Flow
+The user presses the emergency button, sending an alert with location and contact details.
+
+
+The response unit dashboard updates in real time, showing a pulsing red dot on the map.
+
+
+Responders assess the case and contact the pet owner for details.
+
+
+A veterinarian or rescue team is dispatched.
+
+
+The incident is automatically logged into the database for review and analytics.
+
+
+
+Technical Specifications
+Mobile Application (Prototype)
+Framework: React Native (via Expo Go)
+
+
+Development Tools: Expo CLI, Visual Studio Code
+
+
+API Communication: RESTful APIs for sending alerts and retrieving data
+
+
+Map Integration: Google Maps API / Mapbox
+
+
+Data Storage: Firebase Firestore (real-time database)
+
+
+Authentication: Firebase Auth (Email and Phone Sign-in)
+
+
+Testing Environment: Expo Go (Android/iOS mobile testing)
+
+
+Desktop Application (Prototype)
+Framework: Java Swing (for UI)
+
+
+Programming Language: Java SE 17
+
+
+Database: MySQL / Firebase Realtime Database (for prototype sync)
+
+
+Mapping Integration: Embedded web view (Google Maps API)
+
+
+Backend Server (optional): Node.js or Java Servlet for API endpoints
+
+
+Data Communication: JSON-based REST API between desktop and mobile systems
+
+
+
+System Architecture
+Client Side (Mobile App):
+ Sends emergency alerts, receives response updates, and displays map data.
+Server Layer:
+ Handles requests, authentication, and real-time event updates.
+Admin Side (Desktop App):
+ Receives alerts, updates dashboards, and logs data for analytics.
+All components are connected through a cloud-based database (Firebase), ensuring synchronization and real-time updates across devices.
+
+Data Privacy and Security
+All user data (contact details, pet information, and GPS coordinates) are encrypted during transmission.
+
+
+Authentication ensures only verified users can send or view emergency data.
+
+
+Role-based access control limits sensitive data exposure.
+
+
+
+Project Tools and Environment
+Development Tools: Visual Studio Code, Code::Blocks, XAMPP, Android Studio
+
+
+Design Tools: Figma or Adobe XD for UI/UX mockups
+
+
+Collaboration Tools: GitHub, Trello, Google Workspace
+
+
+Testing Tools: Expo Go for mobile, Java Swing IDE for desktop simulation
+
+
+HAVEN: UI/UX Design Overview
+Design Philosophy
+HAVEN’s UI/UX design centers around clarity, urgency, and empathy. Since it deals with emergencies involving pets, the interface must minimize cognitive load, communicate clearly under stress, and provide immediate access to help.
+The overall design aesthetic follows a modern minimalist emergency interface style — dark mode for the desktop (for responders working in control rooms), and bright, intuitive red-white contrast for the mobile app (for pet owners).
+
+MOBILE APP (Pet Owners)
+Design Inspiration
+Visual and interaction design is inspired by Callert and RESQ mobile UI samples.
+
+
+Prioritizes accessibility, large touch targets, and intuitive flow.
+
+
+Uses a clean red-and-white color palette with soft gradients and rounded components to establish a sense of urgency yet trust.
+
+
+Core Pages
+1. Home Screen / Emergency Button Interface
+Dominant central red circular button labeled “EMERGENCY” or “PET IN DISTRESS.”
+
+
+Minimal distractions, only essential options visible.
+
+
+Subtext: “Press and hold to send alert” to prevent accidental triggers.
+
+
+Subtle animated pulse around the button to create a sense of readiness.
+
+
+Upon press, an animation plays (expanding ripple or glow), confirming alert dispatch.
+
+
+Layout Structure:
+Top: User profile thumbnail and name (quick access to account).
+
+
+Center: Large emergency button.
+
+
+Bottom: Navigation bar with icons for Home, Report, Map, Profile.
+
+
+
+2. Emergency Form Screen
+For non-critical or secondary reports (e.g., “Lost pet,” “Minor injury,” “Animal stranded”).
+
+
+Multi-step structured form:
+
+
+Category selection (injury, lost pet, rescue, etc.)
+
+
+Description box
+
+
+Upload photo/video option
+
+
+Pet details (species, color, breed, etc.)
+
+
+Optional location correction (using Google Maps pin)
+
+
+Clean card-based form layout for visual grouping.
+
+
+
+3. Live Map Screen
+Displays real-time incident markers (pulsing icons) representing nearby pet-related emergencies.
+
+
+Users can tap a marker to view summary info (type, status, responders).
+
+
+Uses Mapbox or Google Maps API for smooth navigation and zoom.
+
+
+Color-coded alerts:
+
+
+Red: Critical emergency
+
+
+Yellow: Ongoing response
+
+
+Green: Resolved
+
+
+A toggle allows users to switch between “List View” and “Map View.”
+
+
+
+4. Profile and History Screen
+Shows user’s registered contact details and pet profiles.
+
+
+Displays a history of previous reports (timestamp, type, and resolution).
+
+
+Option to update details or delete reports.
+
+
+
+UX Interaction Highlights
+One-click emergency flow: Button → Confirmation → Alert sent → Notification feedback.
+
+
+Location auto-detection: Fetches GPS instantly after pressing emergency.
+
+
+Smooth transitions: Fade and slide animations between screens for clarity.
+
+
+Accessibility: High-contrast mode, haptic feedback, and voice accessibility for disabled users.
+
+
+
+DESKTOP APP (Emergency Response Unit)
+Design Inspiration
+Based on the dark-mode mapping dashboards shown in the first two images.
+
+
+Interface is professional, data-oriented, and optimized for widescreen monitoring setups.
+
+
+Color palette: charcoal black, muted blue, and emergency red highlights.
+
+
+
+Core Interface Layout
+1. Live Mapping Dashboard (Primary Screen)
+Central focus: a real-time interactive map showing emergency alerts within the area of responsibility.
+
+
+Each alert appears as a pulsing red dot (critical) or yellow dot (minor).
+
+
+Hovering or clicking displays a tooltip with details (report ID, user, pet type, location, time).
+
+
+Right-hand panel lists active cases chronologically, with status indicators (NEW, IN RESPONSE, RESOLVED).
+
+
+Filter options for “Critical Only,” “Ongoing,” “Resolved,” and “All Reports.”
+
+
+Zoom and pan enabled for precise location tracking.
+
+
+Map Visualization Elements:
+Animated response vehicle icons (ambulance, rescue, vet van) with real-time tracking.
+
+
+Area outlines highlighting coverage zones per unit.
+
+
+Optional weather or traffic overlay for operational awareness.
+
+
+
+2. Incident Log Page
+Displays complete records of all alerts received, filterable by date, location, or type.
+
+
+Each record links to detailed view including:
+
+
+User info (name, contact, address)
+
+
+Pet info
+
+
+Incident summary and timestamp
+
+
+Actions taken and notes from responders
+
+
+Export to CSV or PDF for documentation.
+
+
+
+3. Statistics Dashboard
+Provides visual analytics of response performance and incident distribution.
+
+
+Components:
+
+
+Total alerts this month
+
+
+Average response time
+
+
+Breakdown by incident type (injury, rescue, lost pet, etc.)
+
+
+Heatmap visualization overlay on the map
+
+
+Chart libraries: Recharts or Chart.js for responsive visuals.
+
+
+
+4. User Management Page
+Database of all registered HAVEN users.
+
+
+Searchable by name, contact, or location.
+
+
+Allows editing of verified responders, assigned zones, and permissions.
+
+
+
+5. Communication and Coordination Interface
+In-dashboard messaging system to directly reach out to the pet owner who sent the report.
+
+
+Simple chat interface on right panel, enabling quick response and photo sharing.
+
+
+“Call Now” button integrated using VoIP API or tel: protocol for immediate contact.
+
+
+
+UX Principles
+Cognitive Clarity: Every alert and icon communicates a single clear message.
+
+
+Visual Hierarchy: Red pulsing markers grab attention, followed by detailed lists on the right.
+
+
+Consistency: Unified dark theme, sans-serif typography (Inter or Roboto), and icon-based navigation.
+
+
+Responsiveness: Scales to both single-monitor and multi-screen control centers.
+
+
+
+UI Components and Style Guide
+Color Palette:
+Primary Red (#FF3B30) – Emergency action and highlights
+
+
+Secondary Blue (#2D9CDB) – Data and system states
+
+
+Charcoal Gray (#121212) – Background
+
+
+White (#FFFFFF) – Typography and icon clarity
+
+
+Typography:
+Header Font: Montserrat Bold (for labels and alerts)
+
+
+Body Font: Inter / Roboto Regular
+
+
+Iconography:
+Minimal outlined icons with filled state for active pages
+
+
+Icons from Lucide or Feather icon set
+
+
+Interaction Feedback:
+Soft glows, pulsing effects, and micro-animations for real-time responsiveness.
+
+
+Red alert sounds and vibration cues for critical notifications (optional).
+
+
+
+Prototype Development
+Mobile Prototype:
+Platform: React Native (Expo Go)
+
+
+Tools: Expo CLI, Figma for design
+
+
+Features: Button animation, form flow, live map mock integration
+
+
+Testing: Android/iOS real-device simulation via Expo Go
+
+
+Desktop Prototype:
+Platform: Java Swing (for front-end UI)
+
+
+Tools: NetBeans / IntelliJ / Code::Blocks
+
+
+Map integration using Google Maps WebView
+
+
+Mock API connection with Firebase or local JSON server
+
+
+
+
+
+

@@ -1,187 +1,174 @@
-# HAVEN: Pet Emergency Response System
+# HAVEN Pet Emergency Response System
 
 ## Overview
-HAVEN is an integrated mobile and desktop emergency response system designed specifically for pet-related emergencies. The system connects pet owners to local emergency response units, veterinarians, and animal rescue organizations in real time.
 
-## Project Structure
-```
-HAVEN/
-├── HAVEN/              # Backend API Server (Node.js/Express)
-├── mobile/             # Mobile Application (React Native/Expo)
-├── desktop/            # Desktop Application (Java Swing)
-└── docs/               # Documentation
-```
+HAVEN is an integrated pet emergency response system that connects pet owners with emergency services, veterinarians, and rescue organizations in real time. The system consists of three main components:
 
-## System Components
+1. **Backend API Server** (Node.js/Express) - Handles user authentication, emergency alerts, and real-time monitoring
+2. **Mobile Application** (React Native/Expo) - One-tap emergency alerting for pet owners
+3. **Desktop Application** (Java Swing) - Dashboard for emergency responders
 
-### 1. Backend API Server
-- **Technology**: Node.js with Express.js
-- **Port**: 3000
-- **Features**:
-  - User authentication (JWT)
-  - Emergency alert creation
-  - Real-time emergency monitoring
-  - User management
+## System Requirements
 
-### 2. Mobile Application
-- **Technology**: React Native with Expo
-- **Features**:
-  - One-tap emergency button
-  - User registration and login
-  - Emergency alert submission
-  - Location-based services
-
-### 3. Desktop Application ✅ **COMPLETED**
-- **Technology**: Java Swing with JavaFX WebView
-- **Status**: ✅ Fully implemented and tested
-- **Features**:
-  - Emergency dashboard
-  - Real-time emergency monitoring
-  - Response coordination
-  - Incident logging
-  - Interactive map with Leaflet and OpenStreetMap
-  - Custom UI components with modern light theme
-  - **Enhanced UI/UX with icon-based navigation and animated red map markers**
-
-## Setup and Installation
-
-### Prerequisites
 - Node.js 18.x or later
-- Java 17 or later
-- Expo CLI (for mobile development)
-- Maven 3.6 or later (for desktop application)
+- Java JDK 17 or later
+- Apache Maven 3.9.x
+- Expo CLI installed globally (`npm install -g expo-cli`)
 
-### Backend API Server Setup
+## Quick Start
+
+### 1. Initialize the System
+
+Run the initialization script to set up the environment:
+
 ```bash
-cd HAVEN
-npm install
-npm start
+# On Windows
+init.bat
+
+# On macOS/Linux
+./init.sh
 ```
 
-The server will start on http://localhost:3000
+### 2. Start All Components
 
-### Mobile Application Setup
+Run the main startup script to launch all system components:
+
 ```bash
-cd mobile
-npm install
-npx expo start
+# On Windows
+run.bat
+
+# On macOS/Linux
+./run.sh
 ```
 
-To run on Android:
-```bash
-npx expo start --android
-```
+This will start:
+- Backend API server on port 3000
+- Mobile development server
+- Desktop application
 
-To run on iOS:
-```bash
-npx expo start --ios
-```
+### 3. Access the Applications
 
-### Desktop Application Setup ✅ **READY**
-```bash
-cd desktop
-mvn clean install
-mvn exec:java
-```
+1. **Backend API**: http://localhost:3000
+2. **Mobile App**: Scan the QR code in the Expo terminal or use an emulator
+3. **Desktop App**: The Java Swing application will open automatically
 
-Or use the provided scripts:
-- Windows: `run.bat`
-- Unix/Linux/Mac: `run.sh`
-
-## Building the Applications
+## Component Details
 
 ### Backend API Server
-The backend is a Node.js application that runs directly with Node.
 
-### Mobile Application
-To build the mobile app for distribution:
-```bash
-cd mobile
-npx expo build
-```
+The backend is built with Node.js and Express, providing RESTful APIs under `/api/v1/`.
 
-### Desktop Application ✅ **COMPLETED**
-To build the desktop app as a JAR file:
-```bash
-# Unix/Linux/Mac
-cd desktop
-./build.sh
+**Key Features:**
+- JWT-based authentication
+- Real-time WebSocket communication
+- CSV-based data persistence
+- Emergency alert management
 
-# Windows
-cd desktop
-build.bat
-```
-
-The JAR file will be created in `desktop/target/haven-desktop-1.0.0.jar`
-
-## Default Admin Account
-- **Username**: admin@example.com
-- **Password**: admin123
-
-## API Endpoints
-
-### Authentication
-- `POST /api/v1/auth/login` - User login
+**API Endpoints:**
 - `POST /api/v1/auth/register` - User registration
-
-### Emergencies
+- `POST /api/v1/auth/login` - User authentication
+- `GET /api/v1/users/profile` - User profile retrieval
 - `POST /api/v1/emergencies/alert` - Create emergency alert
 - `GET /api/v1/emergencies/active` - Get active emergencies
 
-### User Management
-- `GET /api/v1/users/profile` - Get user profile
+### Mobile Application
+
+The mobile app is built with React Native and Expo, providing a cross-platform solution for pet owners.
+
+**Key Features:**
+- One-tap emergency alerting
+- Location services integration
+- Real-time emergency status updates via WebSocket
+- User authentication
+
+### Desktop Application
+
+The desktop app is built with Java Swing, providing a dashboard for emergency responders.
+
+**Key Features:**
+- Real-time incident view
+- Emergency status management
+- Map visualization
+- WebSocket-based real-time updates
+
+## Database Structure
+
+The system uses CSV files for data persistence, stored in the `HAVEN/database` directory:
+
+- `users.csv` - User account information
+- `emergencies.csv` - Emergency alert records
+- `responders.csv` - Emergency responder information
+
+## Real-Time Communication
+
+The system implements real-time bidirectional communication using:
+- WebSocket for push updates (real-time notifications)
+- REST API for pull requests (data synchronization)
+
+## Default Credentials
+
+For testing purposes, the system includes a default admin account:
+- **Email**: admin@example.com
+- **Password**: admin123
+
+## Troubleshooting
+
+### Mobile App Connection Issues
+
+If the mobile app cannot connect to the backend:
+1. Ensure all components are running
+2. Check that your mobile device and computer are on the same network
+3. Verify the backend IP address in `mobile/services/api.js`
+
+### Desktop App Issues
+
+If the desktop app fails to start:
+1. Ensure Java JDK 17+ is installed and in your PATH
+2. Verify Maven is properly configured
+3. Check the console output for specific error messages
 
 ## Development
 
 ### Backend Development
+
+To run the backend in development mode with auto-reload:
+
 ```bash
 cd HAVEN
 npm run dev
 ```
 
 ### Mobile Development
+
+To run the mobile app with Expo:
+
 ```bash
 cd mobile
 npx expo start
 ```
 
-### Desktop Development ✅ **READY**
+### Desktop Development
+
+To run the desktop app:
+
 ```bash
 cd desktop
-mvn compile
-mvn javafx:run
+mvn exec:java
 ```
 
 ## Testing
 
-### Backend Testing
+To run the real-time synchronization tests:
+
 ```bash
-cd HAVEN
-npm test
+node test-realtime-sync.js
 ```
 
-### Mobile Testing
-```bash
-cd mobile
-npm test
-```
+## Architecture
 
-### Desktop Testing ✅ **IMPLEMENTED**
-```bash
-cd desktop
-mvn test
-```
+The system follows a three-tier architecture:
+1. **Presentation Layer**: Mobile and desktop applications
+2. **Logic Layer**: Backend API server
+3. **Data Layer**: CSV-based persistence
 
-## Documentation
-All project documentation can be found in the `docs/` folder:
-- Product Requirements Document
-- Technical Specification Document
-- Development Task Breakdown
-- Prototype Implementation Checklist
-- Cross-Platform Testing Strategy
-- Documentation Requirements
-- Project Structure Guide
-- System Summary
-
-## License
-This project is proprietary to HAVEN Pet Emergency Response System.
+All components communicate through the central backend API, with real-time updates propagated via WebSocket connections.

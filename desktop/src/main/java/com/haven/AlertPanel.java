@@ -17,7 +17,7 @@ public class AlertPanel extends JPanel {
         this.addAlertListener = addAlertListener;
         
         setPreferredSize(new Dimension(320, 0)); // Slightly wider
-        setBackground(Color.WHITE);
+        setBackground(Color.WHITE); // Light theme background
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         setLayout(new BorderLayout());
         
@@ -26,10 +26,11 @@ public class AlertPanel extends JPanel {
         header.setPreferredSize(new Dimension(0, 60)); // Taller header
         header.setLayout(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        header.setBackground(new Color(240, 240, 240)); // Light header background
         
         JLabel title = new JLabel("Recent Alerts");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f)); // Larger font
-        title.setForeground(Color.RED.darker());
+        title.setForeground(new Color(255, 59, 48)); // HAVEN Red
         header.add(title, BorderLayout.WEST);
         
         CustomButton addAlertBtn = new CustomButton("+");
@@ -43,12 +44,13 @@ public class AlertPanel extends JPanel {
         // Scrollable alert list
         alertListPanel = new JPanel();
         alertListPanel.setLayout(new BoxLayout(alertListPanel, BoxLayout.Y_AXIS));
-        alertListPanel.setBackground(Color.WHITE);
+        alertListPanel.setBackground(Color.WHITE); // Light theme background
         
         JScrollPane scrollPane = new JScrollPane(alertListPanel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(Color.WHITE); // Match background
         
         // Customize scrollbar
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
@@ -65,7 +67,7 @@ public class AlertPanel extends JPanel {
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
         card.setLayout(new BorderLayout(10, 10));
         card.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        card.setBackground(Color.WHITE);
+        card.setBackground(new Color(245, 245, 245)); // Light card background
         
         // Left side - Title and description
         JPanel left = new JPanel();
@@ -98,7 +100,7 @@ public class AlertPanel extends JPanel {
         
         JLabel idLabel = new JLabel(alert.id);
         idLabel.setFont(idLabel.getFont().deriveFont(Font.BOLD, 12f));
-        idLabel.setForeground(Color.RED.darker());
+        idLabel.setForeground(new Color(255, 59, 48)); // HAVEN Red
         
         JLabel timeLabel = new JLabel("Just now");
         timeLabel.setFont(timeLabel.getFont().deriveFont(11f));

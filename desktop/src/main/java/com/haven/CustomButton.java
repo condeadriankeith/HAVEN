@@ -4,7 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 
 public class CustomButton extends JButton {
-    private Color bg = Color.RED;
+    private Color bg = new Color(255, 59, 48); // HAVEN Red
     private Color fg = Color.WHITE;
     private boolean isIconButton = false;
 
@@ -30,11 +30,11 @@ public class CustomButton extends JButton {
 
     @Override
     protected void paintComponent(Graphics g) {
-        int arc = isIconButton ? 25 : 14; // More rounded for icons
+        int arc = 18; // Consistent rounded corners for all buttons
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // background
+        // background with modern flat design
         g2.setColor(bg);
         g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
 

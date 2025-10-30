@@ -16,6 +16,7 @@ public class MapPanel extends JPanel {
 
     public MapPanel() {
         setLayout(new BorderLayout());
+        setBackground(Color.WHITE); // Light theme background
         fxPanel = new JFXPanel();
         add(fxPanel, BorderLayout.CENTER);
         
@@ -48,7 +49,8 @@ public class MapPanel extends JPanel {
             height: 100%;
             margin: 0;
             padding: 0;
-            background: #f5f5f5;
+            background: #ffffff; /* Light theme background */
+            color: #000000; /* Black text */
         }
         #map {
             width: 100%;

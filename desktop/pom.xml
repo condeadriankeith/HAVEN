@@ -33,11 +33,23 @@
       <version>${javafx.version}</version>
     </dependency>
 
-    <!-- Optional: Gson for JSON handling if needed -->
+    <!-- Gson for JSON handling -->
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.10.1</version>
+    </dependency>
+
+    <!-- Tyrus WebSocket client -->
+    <dependency>
+      <groupId>org.glassfish.tyrus</groupId>
+      <artifactId>tyrus-client</artifactId>
+      <version>1.17</version>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.tyrus</groupId>
+      <artifactId>tyrus-container-grizzly-client</artifactId>
+      <version>1.17</version>
     </dependency>
 
     <!-- JUnit for testing -->
@@ -106,6 +118,9 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.0</version>
+        <configuration>
+          <mainClass>com.haven.Main</mainClass>
+        </configuration>
       </plugin>
     </plugins>
   </build>

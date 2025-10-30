@@ -8,6 +8,7 @@
 #include "WeakRuntimeHolder.h"
 #include "JNIFunctionBody.h"
 #include "JNIDeallocator.h"
+#include "JSIUtils.h"
 
 #include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
@@ -18,9 +19,11 @@ namespace jni = facebook::jni;
 namespace jsi = facebook::jsi;
 
 namespace expo {
-class JavaScriptValue;
 
 class JavaScriptFunction;
+class JavaScriptValue;
+class JavaScriptWeakObject;
+
 
 /**
  * Represents any JavaScript object. Its purpose is to exposes `jsi::Object` API back to Kotlin.
@@ -34,7 +37,7 @@ public:
   static void registerNatives();
 
   static jni::local_ref<JavaScriptObject::javaobject> newInstance(
-    JSIInteropModuleRegistry *jsiInteropModuleRegistry,
+    JSIContext *jsiContext,
     std::weak_ptr<JavaScriptRuntime> runtime,
     std::shared_ptr<jsi::Object> jsObject
   );
@@ -48,6 +51,8 @@ public:
     WeakRuntimeHolder runtime,
     std::shared_ptr<jsi::Object> jsObject
   );
+
+  virtual ~JavaScriptObject() = default;
 
   std::shared_ptr<jsi::Object> get() override;
 
@@ -71,16 +76,14 @@ public:
 
   static jsi::Object preparePropertyDescriptor(jsi::Runtime &jsRuntime, int options);
 
-  static void defineProperty(
-    jsi::Runtime &runtime,
-    jsi::Object *jsthis,
-    const std::string &name,
-    jsi::Object descriptor
-  );
-
   void defineNativeDeallocator(
     jni::alias_ref<JNIFunctionBody::javaobject> deallocator
   );
+
+  /**
+   * Sets the memory pressure to inform the GC about how much external memory is associated with that specific JS object.
+  */
+  void setExternalMemoryPressure(int size);
 
 protected:
   WeakRuntimeHolder runtimeHolder;
@@ -96,6 +99,8 @@ private:
   );
 
   jni::local_ref<jni::JArrayClass<jstring>> jniGetPropertyNames();
+
+  jni::local_ref<jni::HybridClass<JavaScriptWeakObject, Destructible>::javaobject> createWeak();
 
   jni::local_ref<jni::HybridClass<JavaScriptFunction, Destructible>::javaobject> jniAsFunction();
 
@@ -139,7 +144,7 @@ private:
     auto cName = name->toStdString();
     jsi::Object descriptor = preparePropertyDescriptor(jsRuntime, options);
     descriptor.setProperty(jsRuntime, "value", jsi_type_converter<T>::convert(jsRuntime, value));
-    JavaScriptObject::defineProperty(jsRuntime, jsObject.get(), cName, std::move(descriptor));
+    common::defineProperty(jsRuntime, jsObject.get(), cName.c_str(), std::move(descriptor));
   }
 };
 } // namespace expo

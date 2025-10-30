@@ -2,7 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const http = require('http');
 require('dotenv').config();
+
+// Import CSV handler
+const { readCSV, writeCSV, appendToCSV } = require('./csvHandler');
+
+// Import WebSocket server
+const { initializeWebSocketServer, broadcastEmergencyUpdate } = require('./websocketServer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,21 +19,42 @@ const JWT_SECRET = process.env.JWT_SECRET || 'haven_secret_key';
 app.use(cors());
 app.use(express.json());
 
-// Mock database (in a real implementation, this would be Firebase or a real database)
-const users = [
-  {
-    id: '1',
-    email: 'admin@example.com',
-    phone: '123-456-7890',
-    firstName: 'Admin',
-    lastName: 'User',
-    address: '123 Main St',
-    role: 'admin',
-    password: '$2a$10$XrC4B8CGu97y4QqIg5b3X.wO/bh.BMbixWWpjhgW2s9uFCYDXOFMG' // admin123
-  }
-];
+// Create HTTP server
+const server = http.createServer(app);
 
-const emergencies = [];
+// Helper function to generate user IDs in USR-XXXX format
+async function generateUserId() {
+  const users = await readCSV('users.csv');
+  // Find the highest existing user ID number
+  let maxId = 1;
+  users.forEach(user => {
+    if (user.id && user.id.startsWith('USR-')) {
+      const numPart = parseInt(user.id.substring(4));
+      if (!isNaN(numPart) && numPart > maxId) {
+        maxId = numPart;
+      }
+    }
+  });
+  
+  // Return the next ID in the sequence
+  return `USR-${String(maxId + 1).padStart(4, '0')}`;
+}
+
+// Helper function to generate emergency IDs
+async function generateEmergencyId() {
+  const emergencies = await readCSV('emergencies.csv');
+  // Find the highest existing emergency ID
+  let maxId = 0;
+  emergencies.forEach(emergency => {
+    const numPart = parseInt(emergency.id);
+    if (!isNaN(numPart) && numPart > maxId) {
+      maxId = numPart;
+    }
+  });
+  
+  // Return the next ID
+  return String(maxId + 1);
+}
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -56,6 +84,9 @@ app.post('/api/v1/auth/register', async (req, res) => {
   try {
     const { email, phone, password, firstName, lastName, address } = req.body;
 
+    // Read users from CSV
+    const users = await readCSV('users.csv');
+    
     // Check if user already exists
     const existingUser = users.find(u => u.email === email || u.phone === phone);
     if (existingUser) {
@@ -66,9 +97,9 @@ app.post('/api/v1/auth/register', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create new user
+    // Create new user with formatted ID
     const newUser = {
-      id: String(users.length + 1),
+      id: await generateUserId(),
       email,
       phone,
       firstName,
@@ -78,7 +109,8 @@ app.post('/api/v1/auth/register', async (req, res) => {
       password: hashedPassword
     };
 
-    users.push(newUser);
+    // Save user to CSV
+    await appendToCSV('users.csv', newUser);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -105,6 +137,9 @@ app.post('/api/v1/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Read users from CSV
+    const users = await readCSV('users.csv');
+    
     // Find user
     const user = users.find(u => u.email === email);
     if (!user) {
@@ -138,7 +173,10 @@ app.post('/api/v1/auth/login', async (req, res) => {
 });
 
 // Get user profile
-app.get('/api/v1/users/profile', authenticateToken, (req, res) => {
+app.get('/api/v1/users/profile', authenticateToken, async (req, res) => {
+  // Read users from CSV
+  const users = await readCSV('users.csv');
+  
   const user = users.find(u => u.id === req.user.userId);
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
@@ -156,25 +194,30 @@ app.get('/api/v1/users/profile', authenticateToken, (req, res) => {
 });
 
 // Create emergency alert
-app.post('/api/v1/emergencies/alert', authenticateToken, (req, res) => {
+app.post('/api/v1/emergencies/alert', authenticateToken, async (req, res) => {
   try {
     const { type, severity, description, location } = req.body;
 
     // Create new emergency
     const newEmergency = {
-      id: String(emergencies.length + 1),
+      id: await generateEmergencyId(),
       userId: req.user.userId,
       type,
       severity: severity || 'moderate',
-      location: location || { latitude: 0, longitude: 0 },
-      address: location?.address || '',
-      status: 'new',
       description,
+      status: 'new',
+      latitude: location?.latitude || 0,
+      longitude: location?.longitude || 0,
+      address: location?.address || '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    emergencies.push(newEmergency);
+    // Save emergency to CSV
+    await appendToCSV('emergencies.csv', newEmergency);
+    
+    // Broadcast emergency update via WebSocket
+    broadcastEmergencyUpdate(newEmergency);
 
     res.status(201).json({
       emergencyId: newEmergency.id,
@@ -187,15 +230,57 @@ app.post('/api/v1/emergencies/alert', authenticateToken, (req, res) => {
 });
 
 // Get active emergencies
-app.get('/api/v1/emergencies/active', authenticateToken, (req, res) => {
+app.get('/api/v1/emergencies/active', authenticateToken, async (req, res) => {
+  // Read emergencies from CSV
+  const allEmergencies = await readCSV('emergencies.csv');
+  
   // Return all emergencies for now (in a real implementation, filter by location/proximity)
+  const activeEmergencies = allEmergencies.filter(e => e.status !== 'resolved');
+  
   res.json({
-    emergencies: emergencies.filter(e => e.status !== 'resolved'),
-    total: emergencies.filter(e => e.status !== 'resolved').length
+    emergencies: activeEmergencies,
+    total: activeEmergencies.length
   });
 });
 
+// Update emergency status
+app.put('/api/v1/emergencies/:emergencyId', authenticateToken, async (req, res) => {
+  try {
+    const { emergencyId } = req.params;
+    const { status } = req.body;
+    
+    // Read emergencies from CSV
+    let emergencies = await readCSV('emergencies.csv');
+    
+    // Find the emergency
+    const emergencyIndex = emergencies.findIndex(e => e.id === emergencyId);
+    if (emergencyIndex === -1) {
+      return res.status(404).json({ error: 'Emergency not found' });
+    }
+    
+    // Update emergency status
+    emergencies[emergencyIndex].status = status;
+    emergencies[emergencyIndex].updatedAt = new Date().toISOString();
+    
+    // Write updated emergencies back to CSV
+    const headers = ['id', 'userId', 'type', 'severity', 'description', 'status', 'latitude', 'longitude', 'address', 'createdAt', 'updatedAt'];
+    await writeCSV('emergencies.csv', emergencies, headers);
+    
+    // Broadcast emergency update via WebSocket
+    broadcastEmergencyUpdate(emergencies[emergencyIndex]);
+    
+    res.json({
+      message: 'Emergency status updated successfully',
+      emergency: emergencies[emergencyIndex]
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`HAVEN API Server running on port ${PORT}`);
+  // Initialize WebSocket server
+  initializeWebSocketServer(server);
 });

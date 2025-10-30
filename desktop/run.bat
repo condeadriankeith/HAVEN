@@ -1,5 +1,5 @@
 @echo off
 echo Starting HAVEN Desktop Application...
 cd /d "%~dp0"
-mvn javafx:run
+mvn exec:java
 pause

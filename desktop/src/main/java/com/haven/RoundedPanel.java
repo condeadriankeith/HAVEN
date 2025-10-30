@@ -4,7 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 
 public class RoundedPanel extends JPanel {
-    private Color backgroundColor = Color.WHITE;
+    private Color backgroundColor = Color.WHITE; // Light theme background
     private int cornerRadius = 18;
 
     public RoundedPanel() {
@@ -24,13 +24,13 @@ public class RoundedPanel extends JPanel {
         g2.setColor(backgroundColor);
         g2.fillRoundRect(0, 0, w, h, cornerRadius, cornerRadius);
         
-        // Subtle border
-        g2.setColor(new Color(200, 200, 200));
+        // Subtle border with light color scheme
+        g2.setColor(new Color(200, 200, 200)); // Light gray border
         g2.drawRoundRect(0, 0, w-1, h-1, cornerRadius, cornerRadius);
         
-        // Soft shadow effect
-        g2.setColor(new Color(0, 0, 0, 30));
-        g2.fillRoundRect(2, 2, w, h, cornerRadius, cornerRadius);
+        // Remove soft shadow effect for flat design
+        // g2.setColor(new Color(0, 0, 0, 30));
+        // g2.fillRoundRect(2, 2, w, h, cornerRadius, cornerRadius);
         
         g2.dispose();
         

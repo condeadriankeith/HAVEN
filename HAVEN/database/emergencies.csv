@@ -1,12 +1,2 @@
-﻿id
-userId
-type
-severity
-description
-status
-latitude
-longitude
-address
-createdAt
-updatedAt
-�
+emergencyId,userId,userName,userPhone,userEmail,latitude,longitude,address,emergencyType,status,reportedAt,respondedAt,resolvedAt,assignedResponderId,notes,createdAt,updatedAt
+EMG-0001,USR-0001,Admin User,123-456-7890,admin@example.com,10.666648915448938,122.99316937796377,"Seal Street Bacolod City, Negros Occidental 6100",Pet Health Emergency,ACTIVE,2025-11-13T00:00:55.131Z,,,,,2025-11-13T00:00:55.131Z,2025-11-13T00:00:55.131Z

@@ -10,11 +10,13 @@ public class AlertPanel extends JPanel {
     private final JPanel alertListPanel;
     private final List<AlertData> alerts = new ArrayList<>();
     private final Consumer<AlertData> alertClickListener;
-    private final Runnable addAlertListener;
+    // Removed addAlertListener since the add button is no longer needed
+    // private final Runnable addAlertListener;
 
-    public AlertPanel(Consumer<AlertData> alertClickListener, Runnable addAlertListener) {
+    // Updated constructor to remove the unused addAlertListener parameter
+    public AlertPanel(Consumer<AlertData> alertClickListener) {
         this.alertClickListener = alertClickListener;
-        this.addAlertListener = addAlertListener;
+        // this.addAlertListener = addAlertListener; // Removed
         
         setPreferredSize(new Dimension(320, 0)); // Slightly wider
         setBackground(Color.WHITE); // Light theme background
@@ -33,11 +35,12 @@ public class AlertPanel extends JPanel {
         title.setForeground(new Color(255, 59, 48)); // HAVEN Red
         header.add(title, BorderLayout.WEST);
         
-        CustomButton addAlertBtn = new CustomButton("+");
-        addAlertBtn.setPreferredSize(new Dimension(40, 40));
-        addAlertBtn.setFont(addAlertBtn.getFont().deriveFont(20f));
-        addAlertBtn.addActionListener(e -> addAlertListener.run());
-        header.add(addAlertBtn, BorderLayout.EAST);
+        // Removed the add (+) button as it's no longer needed
+        // CustomButton addAlertBtn = new CustomButton("+");
+        // addAlertBtn.setPreferredSize(new Dimension(40, 40));
+        // addAlertBtn.setFont(addAlertBtn.getFont().deriveFont(20f));
+        // addAlertBtn.addActionListener(e -> addAlertListener.run());
+        // header.add(addAlertBtn, BorderLayout.EAST);
         
         add(header, BorderLayout.NORTH);
         

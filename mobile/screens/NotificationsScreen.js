@@ -195,10 +195,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: SPACING.medium,
     marginBottom: SPACING.small,
+    // Removed border styles as per UI guidelines - using spacing and background colors instead
   },
   unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.accentRed,
+    // Replaced border with background color variation for visual distinction
+    backgroundColor: '#F0F0F0', // Slightly different background for unread notifications
   },
   notificationTitle: {
     fontSize: TYPOGRAPHY.body.fontSize,

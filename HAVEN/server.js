@@ -2,7 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const http = require('http');
+const socketIo = require('socket.io');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 // Import CSV handler
@@ -11,16 +15,268 @@ const { readCSV, writeCSV, appendToCSV } = require('./csvHandler');
 // Import WebSocket server
 const { initializeWebSocketServer, broadcastEmergencyUpdate } = require('./websocketServer');
 
+// Define the database directory
+const DATABASE_DIR = path.join(__dirname, 'database');
+
+// Function to ensure default admin user exists
+async function ensureAdminUser() {
+  try {
+    const users = await readCSV('users.csv');
+    const adminUser = users.find(user => user.email === 'admin@example.com');
+    
+    if (!adminUser) {
+      // Create default admin user
+      const defaultAdmin = {
+        id: 'USR-0001',
+        email: 'admin@example.com',
+        phone: '123-456-7890',
+        firstName: 'Admin',
+        lastName: 'User',
+        address: 'Default Admin Address',
+        role: 'admin',
+        password: '$2a$10$G54sq85aYb484xKVawJfSOo5Lbop8/NywuR4ODvM9YKuo.HCaKQ8y' // bcrypt hash for "admin123"
+      };
+      
+      // Add to existing users or create new array
+      const updatedUsers = [...users, defaultAdmin];
+      const headers = ['id', 'email', 'phone', 'firstName', 'lastName', 'address', 'role', 'password'];
+      await writeCSV('users.csv', updatedUsers, headers);
+      
+      console.log('Default admin user created.');
+    }
+  } catch (error) {
+    console.error('Error ensuring admin user exists:', error);
+  }
+}
+
+// Function to clear CSV files
+async function clearCSVFiles() {
+  try {
+    // Clear emergencies.csv
+    const emergenciesHeaders = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+    await writeCSV('emergencies.csv', [], emergenciesHeaders);
+    
+    // Clear responders.csv
+    const respondersHeaders = ['id', 'name', 'organization', 'phone', 'email', 'specialty', 'latitude', 'longitude', 'status', 'lastActive'];
+    await writeCSV('responders.csv', [], respondersHeaders);
+    
+    // Ensure admin user exists
+    await ensureAdminUser();
+    
+    console.log('CSV files cleared successfully. Admin user preserved.');
+  } catch (error) {
+    console.error('Error clearing CSV files:', error);
+  }
+}
+
 const app = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'haven_secret_key';
+const DEFAULT_PORT = process.env.PORT || 3000;
+const crypto = require('crypto');
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+
+// Rate limiting - removed for testing
+
+// Apply rate limiting to all requests - removed for testing
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Create HTTP server
-const server = http.createServer(app);
+// Clear CSV files on server startup
+(async () => {
+  await clearCSVFiles();
+  
+  // Create HTTP server
+  const server = http.createServer(app);
+  
+  // Initialize Socket.IO server
+  const io = socketIo(server, {
+    cors: {
+      origin: ["http://localhost:8080", "http://localhost:19006"], // Desktop and mobile app origins
+      methods: ["GET", "POST"]
+    }
+  });
+  
+  // Store connected clients
+  const connectedClients = new Map();
+  
+  // Make io available globally
+  global.io = io;
+  
+  // Socket.IO connection handling
+  io.on('connection', (socket) => {
+    console.log('New client connected:', socket.id);
+    
+    // Handle authentication
+    socket.on('authenticate', async (data) => {
+      try {
+        const { token } = data;
+        const decoded = jwt.verify(token, JWT_SECRET);
+        socket.userId = decoded.userId;
+        socket.userRole = decoded.role;
+        connectedClients.set(socket.id, { userId: decoded.userId, role: decoded.role });
+        
+        console.log(`User ${decoded.userId} authenticated with role ${decoded.role}`);
+        socket.emit('authenticated', { type: 'authenticated', success: true });
+        
+        // Join emergency alerts room
+        socket.join('emergency-alerts');
+        
+        // Send current active emergencies to newly connected desktop clients
+        if (decoded.role === 'admin' || decoded.role === 'responder') {
+          const activeEmergencies = await getActiveEmergencies();
+          socket.emit('current-emergencies', { type: 'current-emergencies', emergencies: activeEmergencies });
+        }
+      } catch (err) {
+        console.error('Authentication error:', err);
+        socket.emit('error', { type: 'error', message: 'Authentication failed' });
+        socket.disconnect();
+      }
+    });
+    
+    // Handle subscription to emergency alerts
+    socket.on('subscribe-emergency-alerts', (data) => {
+      if (socket.userId) {
+        socket.join('emergency-alerts');
+        socket.emit('subscription-ack', { type: 'subscription-ack', success: true });
+        console.log(`Client ${socket.userId} subscribed to emergency alerts`);
+      } else {
+        socket.emit('error', { type: 'error', message: 'Not authenticated' });
+      }
+    });
+    
+    // Handle emergency status update
+    socket.on('emergency-status-update', async (data) => {
+      try {
+        const { emergencyId, newStatus, responderId } = data;
+        
+        if (!socket.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+        
+        // Validate emergency ID exists
+        const emergencies = await readCSV('emergencies.csv');
+        const emergencyIndex = emergencies.findIndex(e => e.emergencyId === emergencyId);
+        
+        if (emergencyIndex === -1) {
+          socket.emit('error', { message: 'Emergency not found' });
+          return;
+        }
+        
+        // Update emergency status
+        const now = new Date().toISOString();
+        emergencies[emergencyIndex].status = newStatus;
+        emergencies[emergencyIndex].updatedAt = now;
+        
+        if (newStatus === 'RESPONDING' && responderId) {
+          emergencies[emergencyIndex].assignedResponderId = responderId;
+          emergencies[emergencyIndex].respondedAt = now;
+        } else if (newStatus === 'RESOLVED') {
+          emergencies[emergencyIndex].resolvedAt = now;
+        }
+        
+        // Save updated emergencies to CSV
+        const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+        await writeCSV('emergencies.csv', emergencies, headers);
+        
+        // Broadcast status change to all clients
+        const updatedEmergency = emergencies[emergencyIndex];
+        io.to('emergency-alerts').emit('emergency-status-changed', {
+          type: 'emergency-status-changed',
+          emergency: updatedEmergency
+        });
+        
+        socket.emit('status-update-ack', { success: true, emergency: updatedEmergency });
+        console.log(`Emergency ${emergencyId} status updated to ${newStatus}`);
+      } catch (error) {
+        console.error('Error updating emergency status:', error);
+        socket.emit('error', { message: 'Failed to update emergency status' });
+      }
+    });
+    
+    // Handle new emergency alert from mobile app
+    socket.on('new-emergency-alert', async (data) => {
+      try {
+        console.log('Received new emergency alert via WebSocket:', data);
+        
+        if (!socket.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+        
+        const { emergency } = data;
+        
+        // Validate emergency data
+        if (!emergency || (!emergency.userId && !socket.userId) || !emergency.latitude || !emergency.longitude) {
+          socket.emit('error', { message: 'Invalid emergency data' });
+          return;
+        }
+        
+        // Use emergency userId or socket userId
+        const userId = emergency.userId || socket.userId;
+        
+        // Validate user
+        const user = await getUserById(userId);
+        if (!user) {
+          socket.emit('error', { message: 'User not found' });
+          return;
+        }
+        
+        // Generate emergency ID if not provided
+        const emergencyId = emergency.emergencyId || await generateEmergencyId();
+        
+        // Create emergency record
+        const emergencyData = {
+          emergencyId,
+          userId: userId,
+          userName: emergency.contactInfo?.name || `${user.firstName} ${user.lastName}`,
+          userPhone: emergency.contactInfo?.phone || user.phone,
+          userEmail: emergency.contactInfo?.email || user.email,
+          latitude: emergency.latitude,
+          longitude: emergency.longitude,
+          address: emergency.address || `Approximate location: ${emergency.latitude.toFixed(6)}, ${emergency.longitude.toFixed(6)}`,
+          emergencyType: emergency.emergencyType || 'Pet Health Emergency',
+          status: 'ACTIVE',
+          reportedAt: emergency.timestamp || new Date().toISOString(),
+          respondedAt: '',
+          resolvedAt: '',
+          assignedResponderId: '',
+          notes: emergency.additionalDetails || '',
+          createdAt: emergency.timestamp || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        console.log('Emergency data to save:', emergencyData);
+        
+        // Save emergency record to database
+        const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+        await appendToCSV('emergencies.csv', emergencyData);
+        
+        // Broadcast emergency to all connected clients
+        io.to('emergency-alerts').emit('new-emergency-alert', {
+          type: 'new-emergency-alert',
+          emergency: emergencyData
+        });
+        
+        socket.emit('emergency-ack', { success: true, emergencyId });
+        console.log('Emergency alert processed and broadcasted:', emergencyId);
+      } catch (error) {
+        console.error('Error processing emergency alert:', error);
+        socket.emit('error', { message: 'Failed to process emergency alert' });
+      }
+    });
+    
+    // Handle client disconnect
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+      connectedClients.delete(socket.id);
+    });
+  });
+  
+  // Start server with fallback mechanism
+  startServer(server, parseInt(DEFAULT_PORT));
+})();
 
 // Helper function to generate user IDs in USR-XXXX format
 async function generateUserId() {
@@ -40,20 +296,22 @@ async function generateUserId() {
   return `USR-${String(maxId + 1).padStart(4, '0')}`;
 }
 
-// Helper function to generate emergency IDs
+// Helper function to generate emergency IDs in EMG-XXXX format
 async function generateEmergencyId() {
   const emergencies = await readCSV('emergencies.csv');
   // Find the highest existing emergency ID
   let maxId = 0;
   emergencies.forEach(emergency => {
-    const numPart = parseInt(emergency.id);
-    if (!isNaN(numPart) && numPart > maxId) {
-      maxId = numPart;
+    if (emergency.emergencyId && emergency.emergencyId.startsWith('EMG-')) {
+      const numPart = parseInt(emergency.emergencyId.substring(4));
+      if (!isNaN(numPart) && numPart > maxId) {
+        maxId = numPart;
+      }
     }
   });
   
-  // Return the next ID
-  return String(maxId + 1);
+  // Return the next ID in the sequence
+  return `EMG-${String(maxId + 1).padStart(4, '0')}`;
 }
 
 // Authentication middleware
@@ -74,9 +332,64 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Socket.IO connection handling
+// This will be initialized inside the async function
+
+// Function to broadcast emergency to all connected clients
+function broadcastEmergency(emergencyData) {
+  // Broadcast via Socket.IO
+  global.io.to('emergency-alerts').emit('new-emergency-alert', {
+    type: 'new-emergency-alert',
+    emergency: emergencyData
+  });
+  
+  // Broadcast via WebSocket
+  broadcastEmergencyUpdate(emergencyData);
+  
+  console.log('Emergency broadcasted to all clients:', emergencyData.emergencyId);
+}
+
+// Function to get active emergencies
+async function getActiveEmergencies() {
+  const allEmergencies = await readCSV('emergencies.csv');
+  return allEmergencies.filter(e => e.status === 'ACTIVE');
+}
+
+// Function to get user by ID
+async function getUserById(userId) {
+  const users = await readCSV('users.csv');
+  return users.find(u => u.id === userId);
+}
+
 // Routes
 app.get('/', (req, res) => {
   res.json({ message: 'HAVEN Pet Emergency Response System API' });
+});
+
+// Log endpoint for mobile app debugging
+app.post('/api/v1/logs', (req, res) => {
+  try {
+    const { level, message, metadata, timestamp, userAgent, platform } = req.body;
+    
+    // Log the message to the server console with a prefix to distinguish mobile logs
+    const logPrefix = `[MOBILE-APP-${platform.toUpperCase()}]`;
+    const formattedLog = `${logPrefix} [${level.toUpperCase()}] ${timestamp} - ${message}`;
+    
+    // Log to server console
+    if (level === 'error') {
+      console.error(formattedLog, metadata);
+    } else if (level === 'warn') {
+      console.warn(formattedLog, metadata);
+    } else {
+      console.log(formattedLog, metadata);
+    }
+    
+    // Return success response
+    res.status(200).json({ success: true, message: 'Log received' });
+  } catch (error) {
+    console.error('Error processing mobile app log:', error);
+    res.status(500).json({ success: false, error: 'Failed to process log' });
+  }
 });
 
 // User registration
@@ -133,22 +446,38 @@ app.post('/api/v1/auth/register', async (req, res) => {
 });
 
 // User login
-app.post('/api/v1/auth/login', async (req, res) => {
+app.all('/api/v1/auth/login', async (req, res) => {
+  // Only allow POST method
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed. Use POST for login.' });
+  }
   try {
     const { email, password } = req.body;
+    console.log('Login attempt for email:', email);
 
     // Read users from CSV
     const users = await readCSV('users.csv');
+    console.log('Users in database:', users.length);
     
     // Find user
     const user = users.find(u => u.email === email);
+    console.log('Found user:', user ? 'Yes' : 'No');
+    
     if (!user) {
+      console.log('User not found for email:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    console.log('User email from CSV:', user.email);
+    console.log('User password from CSV:', user.password);
+    console.log('Provided password:', password);
+
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
+    console.log('Password valid:', isValidPassword);
+    
     if (!isValidPassword) {
+      console.log('Invalid password for user:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -168,6 +497,7 @@ app.post('/api/v1/auth/login', async (req, res) => {
       token
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -193,39 +523,135 @@ app.get('/api/v1/users/profile', authenticateToken, async (req, res) => {
   });
 });
 
-// Create emergency alert
+// Create emergency report API endpoint
 app.post('/api/v1/emergencies/alert', authenticateToken, async (req, res) => {
   try {
-    const { type, severity, description, location } = req.body;
+    console.log('Received emergency alert request:', req.body);
+    
+    // Handle both nested and flat structures for location data
+    let { contactInfo, location, emergencyType, timestamp, additionalDetails } = req.body;
+    
+    // If location is not provided but latitude/longitude are at top level, create location object
+    if (!location && (req.body.latitude || req.body.longitude)) {
+      location = {
+        latitude: req.body.latitude,
+        longitude: req.body.longitude,
+        accuracy: req.body.accuracy,
+        altitude: req.body.altitude,
+        heading: req.body.heading,
+        speed: req.body.speed,
+        address: req.body.address
+      };
+    }
+    
+    // If location is provided as an object but latitude/longitude are at top level, merge them
+    if (!location) {
+      location = {};
+    }
+    
+    if (req.body.latitude !== undefined) location.latitude = req.body.latitude;
+    if (req.body.longitude !== undefined) location.longitude = req.body.longitude;
+    if (req.body.accuracy !== undefined) location.accuracy = req.body.accuracy;
+    if (req.body.altitude !== undefined) location.altitude = req.body.altitude;
+    if (req.body.heading !== undefined) location.heading = req.body.heading;
+    if (req.body.speed !== undefined) location.speed = req.body.speed;
+    if (req.body.address !== undefined) location.address = req.body.address;
 
-    // Create new emergency
-    const newEmergency = {
-      id: await generateEmergencyId(),
-      userId: req.user.userId,
-      type,
-      severity: severity || 'moderate',
-      description,
-      status: 'new',
-      latitude: location?.latitude || 0,
-      longitude: location?.longitude || 0,
-      address: location?.address || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    // Use the authenticated user's ID
+    const userId = req.user.userId;
+
+    // Validate latitude/longitude ranges
+    if (location.latitude < -90 || location.latitude > 90) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid latitude value', 
+        code: 'INVALID_LATITUDE' 
+      });
+    }
+
+    if (location.longitude < -180 || location.longitude > 180) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid longitude value', 
+        code: 'INVALID_LONGITUDE' 
+      });
+    }
+
+    // Validate required fields
+    if (!userId || !location.latitude || !location.longitude) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields', 
+        code: 'MISSING_FIELDS' 
+      });
+    }
+
+    // Get user data
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'User not found', 
+        code: 'USER_NOT_FOUND' 
+      });
+    }
+
+    // Generate unique emergency ID
+    const emergencyId = await generateEmergencyId();
+    console.log('Generated emergency ID:', emergencyId);
+
+    // Add server-side timestamp if client timestamp is missing
+    const serverTimestamp = timestamp || new Date().toISOString();
+
+    // If address is not provided, use reverse geocoding placeholder
+    const address = location.address || `Approximate location: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+
+    // Create emergency record
+    const emergencyData = {
+      emergencyId,
+      userId,
+      userName: contactInfo?.name || `${user.firstName} ${user.lastName}`,
+      userPhone: contactInfo?.phone || user.phone,
+      userEmail: contactInfo?.email || user.email,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      address,
+      emergencyType: emergencyType || 'Pet Health Emergency',
+      status: 'ACTIVE',
+      reportedAt: serverTimestamp,
+      respondedAt: '',
+      resolvedAt: '',
+      assignedResponderId: '',
+      notes: additionalDetails || '',
+      createdAt: serverTimestamp,
+      updatedAt: serverTimestamp
     };
 
-    // Save emergency to CSV
-    await appendToCSV('emergencies.csv', newEmergency);
-    
-    // Broadcast emergency update via WebSocket
-    broadcastEmergencyUpdate(newEmergency);
+    console.log('Emergency data to save:', emergencyData);
 
+    // Save emergency record to database with status "ACTIVE"
+    const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+    await appendToCSV('emergencies.csv', emergencyData);
+
+    // Broadcast emergency data to all connected desktop clients via Socket.IO
+    broadcastEmergency(emergencyData);
+
+    // Return success response with emergency ID
     res.status(201).json({
-      emergencyId: newEmergency.id,
-      status: newEmergency.status,
-      estimatedResponseTime: '5-10 minutes'
+      success: true,
+      emergencyId,
+      message: 'Emergency report received and broadcast',
+      timestamp: serverTimestamp
     });
+    
+    console.log('Emergency report successfully processed and broadcasted');
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error creating emergency report:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Internal server error', 
+      code: 'INTERNAL_ERROR' 
+    });
   }
 });
 
@@ -235,7 +661,7 @@ app.get('/api/v1/emergencies/active', authenticateToken, async (req, res) => {
   const allEmergencies = await readCSV('emergencies.csv');
   
   // Return all emergencies for now (in a real implementation, filter by location/proximity)
-  const activeEmergencies = allEmergencies.filter(e => e.status !== 'resolved');
+  const activeEmergencies = allEmergencies.filter(e => e.status === 'ACTIVE');
   
   res.json({
     emergencies: activeEmergencies,
@@ -253,7 +679,7 @@ app.put('/api/v1/emergencies/:emergencyId', authenticateToken, async (req, res) 
     let emergencies = await readCSV('emergencies.csv');
     
     // Find the emergency
-    const emergencyIndex = emergencies.findIndex(e => e.id === emergencyId);
+    const emergencyIndex = emergencies.findIndex(e => e.emergencyId === emergencyId);
     if (emergencyIndex === -1) {
       return res.status(404).json({ error: 'Emergency not found' });
     }
@@ -263,7 +689,7 @@ app.put('/api/v1/emergencies/:emergencyId', authenticateToken, async (req, res) 
     emergencies[emergencyIndex].updatedAt = new Date().toISOString();
     
     // Write updated emergencies back to CSV
-    const headers = ['id', 'userId', 'type', 'severity', 'description', 'status', 'latitude', 'longitude', 'address', 'createdAt', 'updatedAt'];
+    const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
     await writeCSV('emergencies.csv', emergencies, headers);
     
     // Broadcast emergency update via WebSocket
@@ -278,9 +704,29 @@ app.put('/api/v1/emergencies/:emergencyId', authenticateToken, async (req, res) 
   }
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`HAVEN API Server running on port ${PORT}`);
-  // Initialize WebSocket server
-  initializeWebSocketServer(server);
-});
+// Function to start server with port fallback
+function startServer(server, port, retries = 5) {
+  server.listen(port, () => {
+    console.log(`HAVEN API Server running on port ${port}`);
+    // Initialize WebSocket server on the same server instance
+    initializeWebSocketServer(server);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      if (retries > 0) {
+        const nextPort = port + 1;
+        console.log(`Port ${port} is already in use, trying ${nextPort}...`);
+        // Try the next port
+        startServer(nextPort, retries - 1);
+      } else {
+        console.error('Unable to find an available port after 5 attempts');
+        process.exit(1);
+      }
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
+}
+

@@ -12,6 +12,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import java.util.Timer;
 import java.util.TimerTask;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.AudioInputStream;
+import java.io.File;
 
 public class HavenDashboard extends JFrame {
 
@@ -37,13 +41,13 @@ public class HavenDashboard extends JFrame {
         // Initialize API service
         apiService = ApiService.getInstance();
         
-        // Initialize WebSocket client for real-time updates
-        initializeWebSocket();
-        
         // Initialize sample user data
         initializeUserData();
         
         initUI();
+        
+        // Initialize WebSocket without authentication for prototype
+        initializeWebSocket();
         
         // Start periodic data refresh
         startDataRefresh();
@@ -51,75 +55,171 @@ public class HavenDashboard extends JFrame {
 
     private void initializeWebSocket() {
         try {
-            // Login with default admin credentials to get a valid token
-            JsonObject loginResponse = apiService.login("admin@example.com", "admin123");
-            if (loginResponse != null && loginResponse.has("token")) {
-                String token = loginResponse.get("token").getAsString();
-                webSocketClient = apiService.getWebSocketClient();
-                // Set up listener for emergency updates
-                webSocketClient.setEmergencyUpdateListener(this::handleEmergencyUpdate);
-                System.out.println("WebSocket connected for real-time updates with authentication");
-            } else {
-                System.err.println("Failed to authenticate with API. Response: " + (loginResponse != null ? loginResponse.toString() : "null"));
-                // Fall back to unauthenticated connection
-                webSocketClient = new WebSocketClient();
-                webSocketClient.connect(null);
-                webSocketClient.setEmergencyUpdateListener(this::handleEmergencyUpdate);
-            }
-        } catch (JsonSyntaxException e) {
-            System.err.println("JSON parsing error during login: " + e.getMessage());
-            // Fall back to unauthenticated connection
-            try {
-                webSocketClient = new WebSocketClient();
-                webSocketClient.connect(null);
-                webSocketClient.setEmergencyUpdateListener(this::handleEmergencyUpdate);
-            } catch (Exception ex) {
-                System.err.println("Failed to establish fallback WebSocket connection: " + ex.getMessage());
-                ex.printStackTrace();
-            }
+            // For prototype, connect without authentication as per project requirements
+            webSocketClient = new WebSocketClient();
+            // Set up listener for emergency updates
+            webSocketClient.setEmergencyUpdateListener(this::handleEmergencyUpdate);
+            webSocketClient.setConnectionListener(new WebSocketClient.ConnectionListener() {
+                @Override
+                public void onConnected() {
+                    System.out.println("WebSocket connected for real-time updates");
+                    SwingUtilities.invokeLater(() -> {
+                        // Update UI to show connected status
+                    });
+                }
+
+                @Override
+                public void onDisconnected() {
+                    System.out.println("WebSocket disconnected");
+                    SwingUtilities.invokeLater(() -> {
+                        // Update UI to show disconnected status
+                    });
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    System.err.println("WebSocket error: " + errorMessage);
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(HavenDashboard.this, 
+                            "WebSocket connection error: " + errorMessage, 
+                            "Connection Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            });
+            
+            // Connect without authentication token for prototype as per project requirements
+            webSocketClient.connect(null);
+            System.out.println("WebSocket connected for real-time updates without authentication (prototype mode)");
         } catch (Exception e) {
             System.err.println("Failed to connect WebSocket: " + e.getMessage());
             e.printStackTrace();
-            // Fall back to unauthenticated connection
-            try {
-                webSocketClient = new WebSocketClient();
-                webSocketClient.connect(null);
-                webSocketClient.setEmergencyUpdateListener(this::handleEmergencyUpdate);
-            } catch (Exception ex) {
-                System.err.println("Failed to establish fallback WebSocket connection: " + ex.getMessage());
-                ex.printStackTrace();
-            }
         }
+    }
+
+    private String loginWithDefaultCredentials() {
+        // For prototype, we don't need to authenticate
+        // Return null to indicate no authentication is needed
+        return null;
     }
 
     private void handleEmergencyUpdate(JsonObject emergency) {
         SwingUtilities.invokeLater(() -> {
             try {
-                String id = emergency.get("id").getAsString();
-                String type = emergency.get("type").getAsString();
-                String description = emergency.get("description").getAsString();
-                String status = emergency.get("status").getAsString();
-                double lat = emergency.get("latitude").getAsDouble();
-                double lng = emergency.get("longitude").getAsDouble();
+                System.out.println("Received emergency update: " + emergency.toString());
                 
-                System.out.println("Received emergency update: " + id + " - " + status);
+                // Extract emergency data with proper field names from the backend
+                String id = emergency.has("emergencyId") ? emergency.get("emergencyId").getAsString() : 
+                           (emergency.has("id") ? emergency.get("id").getAsString() : "Unknown");
+                String type = emergency.has("emergencyType") ? emergency.get("emergencyType").getAsString() : 
+                             (emergency.has("type") ? emergency.get("type").getAsString() : "Pet Emergency");
+                String description = emergency.has("notes") ? emergency.get("notes").getAsString() : 
+                                    (emergency.has("description") ? emergency.get("description").getAsString() : "Pet Emergency Reported");
+                String status = emergency.has("status") ? emergency.get("status").getAsString() : "ACTIVE";
                 
-                // Add to alert panel
-                alertPanel.addAlert(new AlertPanel.AlertData(type, description, "User", id, lat, lng));
+                // Extract latitude and longitude, handling both flat and nested structures
+                double lat = 10.6951; // Default to Bacolod center
+                double lng = 122.9527; // Default to Bacolod center
                 
-                // Add marker to map
-                mapPanel.addMarker(lat, lng, type + " (" + id + ")", false);
+                System.out.println("Raw emergency data: " + emergency.toString());
+                
+                // Check for nested structure (from WebSocket direct send)
+                if (emergency.has("location")) {
+                    JsonObject location = emergency.getAsJsonObject("location");
+                    System.out.println("Location object: " + location.toString());
+                    if (location.has("latitude") && location.has("longitude")) {
+                        lat = location.get("latitude").getAsDouble();
+                        lng = location.get("longitude").getAsDouble();
+                        System.out.println("Extracted coordinates from nested location: " + lat + ", " + lng);
+                    }
+                }
+                // Check for flat structure (from REST API) as fallback
+                else if (emergency.has("latitude") && emergency.has("longitude")) {
+                    lat = emergency.get("latitude").getAsDouble();
+                    lng = emergency.get("longitude").getAsDouble();
+                    System.out.println("Extracted coordinates from flat structure: " + lat + ", " + lng);
+                }
+                
+                // Validate coordinates are within reasonable bounds for Bacolod City
+                if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                    System.err.println("Invalid coordinates detected: " + lat + ", " + lng + ". Using default Bacolod coordinates.");
+                    lat = 10.6765;
+                    lng = 122.9509;
+                }
+                
+                System.out.println("Final coordinates to be used: " + lat + ", " + lng);
+                
+                // Additional validation to prevent ocean coordinates
+                if (lat == 0 && lng == 0) {
+                    System.err.println("Warning: Coordinates are 0,0 (middle of ocean). Using default Bacolod coordinates.");
+                    lat = 10.6765;
+                    lng = 122.9509;
+                }
+                
+                // Extract location accuracy and other details if available
+                String address = emergency.has("address") ? emergency.get("address").getAsString() : 
+                                (emergency.has("location") && emergency.getAsJsonObject("location").has("address") ? 
+                                 emergency.getAsJsonObject("location").get("address").getAsString() : 
+                                 "Location in Bacolod City");
+                
+                System.out.println("Processing emergency update: " + id + " - " + type + " - " + status);
+                System.out.println("Emergency location: " + lat + ", " + lng);
+                
+                // Add to alert panel with full location details
+                String alertDescription = description + (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy") ?
+                    " (Accuracy: " + emergency.getAsJsonObject("location").get("accuracy").getAsDouble() + "m)" : 
+                    (emergency.has("accuracy") ? 
+                     " (Accuracy: " + emergency.get("accuracy").getAsDouble() + "m)" : ""));
+                alertPanel.addAlert(new AlertPanel.AlertData(type, alertDescription, "User", id, lat, lng));
+                
+                // Add animated marker to map with proper title
+                String markerTitle = type + " (" + id + ")";
+                if (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy")) {
+                    markerTitle += " ±" + String.format("%.0f", emergency.getAsJsonObject("location").get("accuracy").getAsDouble()) + "m";
+                } else if (emergency.has("accuracy")) {
+                    markerTitle += " ±" + String.format("%.0f", emergency.get("accuracy").getAsDouble()) + "m";
+                }
+                mapPanel.addMarker(lat, lng, markerTitle, true); // Highlight the new marker
+                mapPanel.centerOn(lat, lng); // Center the map on the new emergency location
                 
                 // Show notification
-                JOptionPane.showMessageDialog(this, 
-                    "New Emergency Alert Received!\nID: " + id + "\nType: " + type + "\nStatus: " + status,
-                    "Emergency Alert", 
-                    JOptionPane.INFORMATION_MESSAGE);
+                showDesktopNotification("🚨 New Pet Emergency", 
+                    "Emergency reported at coordinates: " + lat + ", " + lng);
             } catch (Exception e) {
                 System.err.println("Error processing emergency update: " + e.getMessage());
+                System.err.println("Emergency data: " + emergency.toString());
                 e.printStackTrace();
             }
         });
+    }
+
+    private void showDesktopNotification(String title, String message) {
+        // Play alert sound
+        playAlertSound();
+        
+        // Show desktop notification
+        JOptionPane.showMessageDialog(this, 
+            message,
+            title, 
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void playAlertSound() {
+        try {
+            // In a real implementation, you would play an actual sound file
+            // For now, we'll just print to console
+            System.out.println("[ALERT] Playing emergency alert sound!");
+            // Uncomment and implement the following for actual sound playback:
+            /*
+            File soundFile = new File("src/main/resources/notification.wav");
+            AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundFile);
+            Clip clip = AudioSystem.getClip();
+            clip.open(audioIn);
+            clip.start();
+            */
+        } catch (Exception e) {
+            System.err.println("Error playing alert sound: " + e.getMessage());
+        }
     }
 
     private void initializeUserData() {
@@ -140,8 +240,8 @@ public class HavenDashboard extends JFrame {
         JPanel leftSidebar = createLeftSidebar();
         add(leftSidebar, BorderLayout.WEST);
 
-        // Right alerts panel
-        alertPanel = new AlertPanel(this::onAlertClicked, this::fetchNewAlerts);
+        // Right alerts panel - removed the second parameter since the add button is no longer needed
+        alertPanel = new AlertPanel(this::onAlertClicked);
         add(alertPanel, BorderLayout.EAST);
 
         // Center area with CardLayout

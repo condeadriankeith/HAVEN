@@ -18,13 +18,21 @@ const fileLocks = new Map();
  * @returns {Promise} Promise that resolves when lock is acquired
  */
 function acquireLock(fileName) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = 100; // Max 1 second wait
+    
     const checkLock = () => {
       if (!fileLocks.has(fileName)) {
         fileLocks.set(fileName, true);
         resolve();
       } else {
-        setTimeout(checkLock, 10); // Check again in 10ms
+        attempts++;
+        if (attempts >= maxAttempts) {
+          reject(new Error(`Failed to acquire lock for ${fileName} after ${maxAttempts} attempts`));
+        } else {
+          setTimeout(checkLock, 10); // Check again in 10ms
+        }
       }
     };
     checkLock();
@@ -57,7 +65,7 @@ async function readCSV(fileName) {
     const data = fs.readFileSync(filePath, 'utf8');
     const lines = data.trim().split('\n');
     
-    if (lines.length === 0) return [];
+    if (lines.length === 0 || (lines.length === 1 && lines[0].trim() === '')) return [];
     
     const headers = lines[0].split(',').map(header => header.trim());
     const rows = [];
@@ -69,7 +77,8 @@ async function readCSV(fileName) {
       const row = {};
       
       for (let j = 0; j < headers.length; j++) {
-        row[headers[j]] = values[j] || '';
+        // Handle missing values
+        row[headers[j]] = j < values.length ? values[j] : '';
       }
       
       rows.push(row);
@@ -129,17 +138,39 @@ async function writeCSV(fileName, data, headers) {
   try {
     const filePath = path.join(DATABASE_DIR, fileName);
     
+    // Validate inputs
+    if (!Array.isArray(data)) {
+      throw new Error('Data must be an array');
+    }
+    
+    if (!Array.isArray(headers)) {
+      throw new Error('Headers must be an array');
+    }
+    
     // Create CSV content
     let csvContent = headers.join(',') + '\n';
     
     for (const row of data) {
+      if (!row || typeof row !== 'object') {
+        throw new Error('Each row must be an object');
+      }
+      
       const values = headers.map(header => {
-        const value = row[header] || '';
-        // Escape quotes and wrap in quotes if contains comma or quote
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-          return `"${value.replace(/"/g, '""')}"`;
+        const value = row[header];
+        
+        // Handle missing values
+        if (value === undefined || value === null) {
+          return '';
         }
-        return value;
+        
+        // Convert to string if needed
+        const stringValue = String(value);
+        
+        // Escape quotes and wrap in quotes if contains comma or quote
+        if (stringValue.includes(',') || stringValue.includes('"')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
       });
       csvContent += values.join(',') + '\n';
     }
@@ -160,6 +191,11 @@ async function appendToCSV(fileName, rowData) {
   try {
     const filePath = path.join(DATABASE_DIR, fileName);
     
+    // Validate row data
+    if (!rowData || typeof rowData !== 'object') {
+      throw new Error('Invalid row data provided');
+    }
+    
     // If file doesn't exist, we need headers
     const fileExists = fs.existsSync(filePath);
     let headers = Object.keys(rowData);
@@ -172,19 +208,28 @@ async function appendToCSV(fileName, rowData) {
       // Read headers from existing file
       const fileContent = fs.readFileSync(filePath, 'utf8');
       const lines = fileContent.split('\n');
-      if (lines.length > 0) {
+      if (lines.length > 0 && lines[0].trim() !== '') {
         headers = lines[0].split(',').map(h => h.trim());
       }
     }
     
     // Create data line
     const values = headers.map(header => {
-      const value = rowData[header] || '';
-      // Escape quotes and wrap in quotes if contains comma or quote
-      if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-        return `"${value.replace(/"/g, '""')}"`;
+      const value = rowData[header];
+      
+      // Handle missing values
+      if (value === undefined || value === null) {
+        return '';
       }
-      return value;
+      
+      // Convert to string if needed
+      const stringValue = String(value);
+      
+      // Escape quotes and wrap in quotes if contains comma or quote
+      if (stringValue.includes(',') || stringValue.includes('"')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
     });
     
     const dataLine = values.join(',') + '\n';

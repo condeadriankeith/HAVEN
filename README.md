@@ -8,6 +8,40 @@ HAVEN is an integrated pet emergency response system that connects pet owners wi
 2. **Mobile Application** (React Native/Expo) - One-tap emergency alerting for pet owners
 3. **Desktop Application** (Java Swing) - Dashboard for emergency responders
 
+## Project Structure
+
+```
+HAVEN/
+├── HAVEN/                 # Backend service (Node.js + Express)
+│   ├── server.js          # Entry point
+│   ├── websocketServer.js # WebSocket implementation
+│   ├── csvHandler.js      # CSV data handling
+│   └── database/          # CSV data files
+├── mobile/                # React Native mobile app
+│   ├── App.js             # Main application component
+│   ├── screens/           # Screen components
+│   ├── components/        # Reusable UI components
+│   ├── services/          # API and location services
+│   └── constants/         # Style and configuration constants
+├── desktop/               # Java Swing desktop client
+│   ├── src/               # Source code
+│   ├── pom.xml            # Maven configuration
+│   └── run.bat            # Execution script
+├── docs/                  # Project documentation
+├── tests/                 # Test and verification scripts
+├── init.bat/init.sh       # Environment setup scripts
+└── run.bat/run.sh         # Application startup scripts
+```
+
+## Emergency Reporting Workflow
+
+1. **Pet Owner**: Uses mobile app to report emergency with one-tap alert
+2. **Location Services**: Automatically captures current GPS coordinates
+3. **Backend Processing**: Validates alert and stores in database
+4. **Real-time Broadcast**: WebSocket pushes alert to all connected desktop clients
+5. **Responder Action**: Emergency personnel view alert on dashboard and respond
+6. **Status Updates**: Real-time status changes propagated to all stakeholders
+
 ## System Requirements
 
 - Node.js 18.x or later
@@ -63,33 +97,53 @@ The backend is built with Node.js and Express, providing RESTful APIs under `/ap
 - Real-time WebSocket communication
 - CSV-based data persistence
 - Emergency alert management
+- User profile management
+- Emergency status tracking
 
 **API Endpoints:**
 - `POST /api/v1/auth/register` - User registration
 - `POST /api/v1/auth/login` - User authentication
 - `GET /api/v1/users/profile` - User profile retrieval
-- `POST /api/v1/emergencies/alert` - Create emergency alert
+- `POST /api/emergency/report` - Create emergency alert
 - `GET /api/v1/emergencies/active` - Get active emergencies
+- `PUT /api/v1/emergencies/:emergencyId` - Update emergency status
 
 ### Mobile Application
 
 The mobile app is built with React Native and Expo, providing a cross-platform solution for pet owners.
 
 **Key Features:**
-- One-tap emergency alerting
-- Location services integration
+- One-tap emergency alerting with [EmergencyButton](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/components/EmergencyButton.js#L5-L12)
+- Location services integration with [Location API](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/services/location.js#L7-L42)
 - Real-time emergency status updates via WebSocket
-- User authentication
+- User authentication and profile management
+- Emergency history tracking
+- Map visualization of emergency locations
+
+**Key Screens:**
+- [LoginScreen](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/screens/LoginScreen.js) - User authentication
+- [HomeScreen](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/screens/HomeScreen.js) - Main dashboard with emergency button
+- [ReportForm](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/screens/ReportForm.js) - Detailed emergency reporting
+- [MapScreen](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/screens/MapScreen.js) - Emergency location visualization
+- [ProfileScreen](file:///c%3A/Users/conde/Downloads/HAVEN/mobile/screens/ProfileScreen.js) - User profile management
 
 ### Desktop Application
 
 The desktop app is built with Java Swing, providing a dashboard for emergency responders.
 
 **Key Features:**
-- Real-time incident view
+- Real-time incident view with [AlertPanel](file:///c%3A/Users/conde/Downloads/HAVEN/desktop/src/main/java/com/haven/AlertPanel.java#L23-L174)
 - Emergency status management
-- Map visualization
+- Interactive map visualization with [MapPanel](file:///c%3A/Users/conde/Downloads/HAVEN/desktop/src/main/java/com/haven/MapPanel.java#L27-L191)
 - WebSocket-based real-time updates
+- User management interface
+- Analytics dashboard
+
+**Main Components:**
+- [HavenDashboard](file:///c%3A/Users/conde/Downloads/HAVEN/desktop/src/main/java/com/haven/HavenDashboard.java#L17-L491) - Main application window
+- [WebSocketClient](file:///c%3A/Users/conde/Downloads/HAVEN/desktop/src/main/java/com/haven/WebSocketClient.java#L17-L229) - Real-time communication
+- [ApiService](file:///c%3A/Users/conde/Downloads/HAVEN/desktop/src/main/java/com/haven/ApiService.java#L13-L165) - Backend API integration
+- [CustomButton](file:///c%3A/Users/conde/Downloads/HAVEN/desktop/src/main/java/com/haven/CustomButton.java#L7-L57) - UI components
 
 ## Database Structure
 
@@ -99,17 +153,34 @@ The system uses CSV files for data persistence, stored in the `HAVEN/database` d
 - `emergencies.csv` - Emergency alert records
 - `responders.csv` - Emergency responder information
 
+**Emergency Record Format:**
+```
+id,userId,userName,userPhone,userEmail,latitude,longitude,address,emergencyType,status,reportedAt,respondedAt,resolvedAt,assignedResponderId,notes,createdAt,updatedAt
+```
+
 ## Real-Time Communication
 
 The system implements real-time bidirectional communication using:
 - WebSocket for push updates (real-time notifications)
 - REST API for pull requests (data synchronization)
 
+**Communication Flow:**
+1. Mobile app sends emergency report via REST API
+2. Backend validates and stores emergency
+3. Backend broadcasts emergency via WebSocket
+4. Desktop app receives WebSocket update
+5. Status changes propagate back through WebSocket
+
 ## Default Credentials
 
 For testing purposes, the system includes a default admin account:
 - **Email**: admin@example.com
 - **Password**: admin123
+
+Additional test users:
+- **Pet Owner**: test@example.com / test123
+- **Veterinarian**: vet@example.com / vet123
+- **Rescue Group**: rescue@example.com / rescue123
 
 ## Troubleshooting
 
@@ -119,6 +190,7 @@ If the mobile app cannot connect to the backend:
 1. Ensure all components are running
 2. Check that your mobile device and computer are on the same network
 3. Verify the backend IP address in `mobile/services/api.js`
+4. Check firewall settings on your computer
 
 ### Desktop App Issues
 
@@ -126,6 +198,15 @@ If the desktop app fails to start:
 1. Ensure Java JDK 17+ is installed and in your PATH
 2. Verify Maven is properly configured
 3. Check the console output for specific error messages
+4. Ensure the backend server is running before starting the desktop app
+
+### Backend Server Issues
+
+If the backend server fails to start:
+1. Check that port 3000 is not already in use
+2. Verify all Node.js dependencies are installed
+3. Check the `.env` file for correct configuration
+4. Ensure the database directory and files exist
 
 ## Development
 
@@ -138,6 +219,12 @@ cd HAVEN
 npm run dev
 ```
 
+To run tests:
+```bash
+cd HAVEN
+npm test
+```
+
 ### Mobile Development
 
 To run the mobile app with Expo:
@@ -145,6 +232,12 @@ To run the mobile app with Expo:
 ```bash
 cd mobile
 npx expo start
+```
+
+To run mobile tests:
+```bash
+cd mobile
+npm test
 ```
 
 ### Desktop Development
@@ -156,12 +249,23 @@ cd desktop
 mvn exec:java
 ```
 
-## Testing
+To run desktop tests:
+```bash
+cd desktop
+mvn test
+```
+
+### Project-wide Testing
 
 To run the real-time synchronization tests:
 
 ```bash
-node test-realtime-sync.js
+node tests/test-realtime-sync.js
+```
+
+To test emergency reporting workflow:
+```bash
+node tests/test-emergency-workflow.js
 ```
 
 ## Architecture
@@ -172,3 +276,19 @@ The system follows a three-tier architecture:
 3. **Data Layer**: CSV-based persistence
 
 All components communicate through the central backend API, with real-time updates propagated via WebSocket connections.
+
+### Technology Stack
+
+- **Backend**: Node.js, Express, Socket.IO
+- **Mobile**: React Native, Expo, WebSocket
+- **Desktop**: Java Swing, JXMapViewer2, Tyrus WebSocket
+- **Data**: CSV files
+- **Authentication**: JWT
+- **Build Tools**: npm, Maven
+
+### Security Considerations
+
+- All API requests use JWT tokens for authentication
+- Passwords are hashed using bcrypt
+- WebSocket connections require authentication
+- CORS policies restrict unauthorized access

@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ApiService {
-    private static final String BASE_URL = "http://localhost:3000/api/v1";
+    private static final String BASE_URL = "http://localhost:3000";
     private static ApiService instance;
     private HttpClient client;
     private Gson gson;
@@ -27,6 +27,8 @@ public class ApiService {
                 .build();
         this.gson = new Gson();
         this.webSocketClient = new WebSocketClient();
+        // For prototype, we don't need to authenticate
+        // this.authToken = null;
     }
 
     public static synchronized ApiService getInstance() {
@@ -55,20 +57,35 @@ public class ApiService {
         credentials.put("password", password);
 
         String requestBody = gson.toJson(credentials);
+        
+        System.out.println("Making login request to: " + BASE_URL + "/api/v1/auth/login");
+        System.out.println("Request body: " + requestBody);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/auth/login"))
+                .uri(URI.create(BASE_URL + "/api/v1/auth/login"))
                 .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("User-Agent", "HAVEN Desktop App")
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(Duration.ofSeconds(10)) // 10 seconds timeout
                 .build();
+                
+        System.out.println("Request method: " + request.method());
+        System.out.println("Request headers: " + request.headers().map());
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         
         System.out.println("Login API response status: " + response.statusCode());
+        System.out.println("Login API response headers: " + response.headers().map());
         System.out.println("Login API response body: " + response.body());
         
         // Check if response is valid JSON
         try {
+            // If the response is not JSON, it might be an error message
+            if (response.statusCode() != 200) {
+                throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
+            }
+            
             JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
             
             // Connect WebSocket after successful login
@@ -76,7 +93,9 @@ public class ApiService {
                 String token = jsonResponse.get("token").getAsString();
                 setAuthToken(token);
                 try {
-                    webSocketClient.connect(token);
+                    if (webSocketClient != null) {
+                        webSocketClient.connect(token);
+                    }
                 } catch (Exception e) {
                     System.err.println("Failed to connect WebSocket: " + e.getMessage());
                 }
@@ -85,7 +104,7 @@ public class ApiService {
             return jsonResponse;
         } catch (JsonSyntaxException e) {
             System.err.println("Invalid JSON response from login API: " + response.body());
-            throw e;
+            throw new IOException("Invalid JSON response from login API: " + response.body(), e);
         }
     }
 
@@ -101,7 +120,7 @@ public class ApiService {
         String requestBody = gson.toJson(userData);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/auth/register"))
+                .uri(URI.create(BASE_URL + "/api/v1/auth/register"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
@@ -122,9 +141,8 @@ public class ApiService {
     // User endpoints
     public JsonObject getUserProfile() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/users/profile"))
+                .uri(URI.create(BASE_URL + "/api/v1/users/profile"))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + authToken)
                 .GET()
                 .build();
 
@@ -152,9 +170,8 @@ public class ApiService {
         String requestBody = gson.toJson(alertData);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/emergencies/alert"))
+                .uri(URI.create(BASE_URL + "/api/v1/emergencies/alert"))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + authToken)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
@@ -171,11 +188,39 @@ public class ApiService {
         }
     }
 
-    public JsonObject getActiveEmergencies() throws IOException, InterruptedException {
+    // New emergency report endpoint
+    public JsonObject createEmergencyReport(Map<String, Object> emergencyData) throws IOException, InterruptedException {
+        if (authToken == null || authToken.isEmpty()) {
+            throw new IOException("No authentication token available. Please login first.");
+        }
+        
+        String requestBody = gson.toJson(emergencyData);
+
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/emergencies/active"))
+                .uri(URI.create(BASE_URL + "/api/emergency/report"))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + authToken)
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(Duration.ofSeconds(15)) // 15 seconds timeout
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        System.out.println("Create emergency report API response status: " + response.statusCode());
+        System.out.println("Create emergency report API response body: " + response.body());
+        
+        try {
+            return JsonParser.parseString(response.body()).getAsJsonObject();
+        } catch (JsonSyntaxException e) {
+            System.err.println("Invalid JSON response from emergency report API: " + response.body());
+            throw new IOException("Invalid JSON response from emergency report API: " + response.body(), e);
+        }
+    }
+
+    public JsonObject getActiveEmergencies() throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/api/v1/emergencies/active"))
+                .header("Content-Type", "application/json")
                 .GET()
                 .build();
 
@@ -199,9 +244,8 @@ public class ApiService {
         String requestBody = gson.toJson(statusData);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/emergencies/" + emergencyId))
+                .uri(URI.create(BASE_URL + "/api/v1/emergencies/" + emergencyId))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + authToken)
                 .PUT(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 

@@ -1,5 +1,17 @@
 {
   "dependencies": {
-    "axios": "^1.13.1"
+    "axios": "^1.13.1",
+    "bcryptjs": "^3.0.2",
+    "socket.io-client": "^4.8.1",
+    "websocket": "^1.0.35"
+  },
+  "scripts": {
+    "test-emergency": "node test-emergency-report.js",
+    "test-emergency-workflow": "node test-emergency-workflow.js",
+    "test-mobile-desktop": "node tests/test-mobile-to-desktop-alert.js",
+    "test-auth": "node tests/test-user-authentication.js",
+    "test-complete": "node tests/test-complete-workflow.js",
+    "test-emergency-send": "node tests/test-emergency-send.js",
+    "test-emergency-fix": "node tests/test-emergency-fix.js"
   }
 }

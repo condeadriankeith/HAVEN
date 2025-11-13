@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screens
@@ -17,8 +17,21 @@ import ReportFormScreen from './screens/ReportForm';
 // Components
 import EmergencyButton from './components/EmergencyButton';
 
+// Services
+import { clearToken } from './services/api';
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+// Color constants for consistent styling
+const COLORS = {
+  primary: '#D32F2F',
+  secondary: '#B0B0B0',
+  background: '#FFFFFF',
+  card: '#F9F9F9',
+  text: '#1C1C1C',
+  textSecondary: '#5A5A5A',
+};
 
 // Main tab navigator
 function MainTabs() {
@@ -31,19 +44,36 @@ function MainTabs() {
           if (route.name === 'Home') {
             iconName = 'home';
           } else if (route.name === 'Map') {
-            iconName = 'map';
+            iconName = 'map-marker';
           } else if (route.name === 'Reports') {
             iconName = 'history';
           } else if (route.name === 'Notifications') {
-            iconName = 'notifications';
+            iconName = 'bell';
           } else if (route.name === 'Profile') {
-            iconName = 'person';
+            iconName = 'user';
           }
 
-          return <Icon name={iconName} size={size} color={color} />;
+          // Return FontAwesome icon
+          return <FontAwesome name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#D32F2F',
+        tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: 'gray',
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#E0E0E0',
+          paddingBottom: 5,
+          paddingTop: 5,
+          height: 60,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 5,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
+        headerShown: false,
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
@@ -61,17 +91,34 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkLoginStatus();
+    // Always start in logged out state - clear any existing tokens
+    clearStoredTokens();
   }, []);
 
-  const checkLoginStatus = async () => {
+  const clearStoredTokens = async () => {
     try {
-      const token = await AsyncStorage.getItem('authToken');
-      setIsLoggedIn(!!token);
+      // Clear all authentication tokens to ensure clean start
+      await clearToken();
+      setIsLoggedIn(false);
     } catch (error) {
-      console.error('Error checking login status:', error);
+      console.error('Error clearing tokens:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to handle login state changes
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+  };
+
+  // Function to handle logout
+  const handleLogout = async () => {
+    try {
+      await clearToken();
+      setIsLoggedIn(false);
+    } catch (error) {
+      console.error('Error logging out:', error);
     }
   };
 
@@ -83,16 +130,11 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isLoggedIn ? (
-          <>
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen 
-              name="ReportForm" 
-              component={ReportFormScreen} 
-              options={{ headerShown: true, title: 'Report Incident' }} 
-            />
-          </>
+          <Stack.Screen name="MainTabs" component={MainTabs} />
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Login">
+            {(props) => <LoginScreen {...props} onLogin={handleLogin} />}
+          </Stack.Screen>
         )}
       </Stack.Navigator>
     </NavigationContainer>

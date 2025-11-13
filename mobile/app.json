@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.haven.petemergency"
+      "bundleIdentifier": "com.haven.petemergency",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Location access is required to show your position on the map and send emergency alerts.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Location access is required to show your position on the map and send emergency alerts."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +26,11 @@
         "backgroundColor": "#D32F2F"
       },
       "package": "com.haven.petemergency",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

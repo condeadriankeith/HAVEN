@@ -232,8 +232,7 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 50,
-    borderWidth: 1,
-    borderColor: COLORS.accentGray,
+    backgroundColor: COLORS.secondaryBackground,
     borderRadius: 4,
     paddingHorizontal: SPACING.small,
     fontSize: TYPOGRAPHY.body.fontSize,
@@ -261,8 +260,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignItems: 'center',
     marginBottom: SPACING.small,
-    borderWidth: 1,
-    borderColor: COLORS.accentGray,
   },
   editButtonText: {
     color: COLORS.textPrimary,
@@ -286,8 +283,6 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.medium,
     borderRadius: 4,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.accentRed,
   },
   logoutButtonText: {
     color: COLORS.accentRed,

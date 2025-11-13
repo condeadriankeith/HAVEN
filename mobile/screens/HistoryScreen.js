@@ -104,8 +104,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: SPACING.medium,
     marginBottom: SPACING.medium,
-    borderWidth: 1,
-    borderColor: COLORS.accentGray,
+    // Removed border styles as per UI guidelines - using spacing and background colors instead
   },
   reportHeader: {
     flexDirection: 'row',

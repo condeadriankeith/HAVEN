@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
 
 const EmergencyButton = ({ onPress }) => {
@@ -18,15 +18,24 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentRed,
     alignItems: 'center',
     justifyContent: 'center',
-    // Replaced deprecated shadow* props with boxShadow
-    shadowColor: COLORS.accentRed,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    // Fixed deprecated shadow* props
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.accentRed,
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: `0 4px 8px ${COLORS.accentRed}4D`,
+      }
+    }),
   },
   buttonText: {
     color: COLORS.primaryBackground,

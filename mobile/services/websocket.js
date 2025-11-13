@@ -1,6 +1,24 @@
 import { w3cwebsocket as W3CWebSocket } from 'websocket';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Get WebSocket URL based on platform
+const getWebSocketUrl = () => {
+  if (__DEV__) {
+    // Check if running on web or mobile
+    if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
+      // For mobile devices, use your computer's IP address
+      // Using the IP address we found: 192.168.254.102
+      return 'ws://192.168.254.102:3000';
+    } else {
+      // For web browser, use localhost
+      return 'ws://localhost:3000';
+    }
+  } else {
+    // Production URL
+    return 'ws://your-production-api-url.com';
+  }
+};
+
 class WebSocketService {
   constructor() {
     this.client = null;
@@ -8,6 +26,8 @@ class WebSocketService {
     this.reconnectInterval = 5000; // 5 seconds
     this.maxReconnectAttempts = 5;
     this.reconnectAttempts = 0;
+    this.token = null;
+    this.subscribers = new Set(); // For the new subscribe API
   }
 
   /**
@@ -15,13 +35,16 @@ class WebSocketService {
    * @param {string} token - JWT authentication token
    */
   connect(token) {
+    // Store token for reconnection
+    this.token = token;
+    
     // Close existing connection if any
     if (this.client) {
       this.client.close();
     }
 
     // Create WebSocket connection
-    this.client = new W3CWebSocket(`ws://localhost:3000`);
+    this.client = new W3CWebSocket(getWebSocketUrl());
 
     this.client.onopen = () => {
       console.log('WebSocket connection established');
@@ -32,12 +55,24 @@ class WebSocketService {
         type: 'authenticate',
         token: token
       });
+      
+      // Subscribe to emergency alerts after authentication
+      setTimeout(() => {
+        this.sendMessage({
+          type: 'subscribe-emergency-alerts'
+        });
+      }, 1000);
     };
 
     this.client.onmessage = (message) => {
       try {
         const data = JSON.parse(message.data);
         this.handleMessage(data);
+        
+        // Forward to subscribers for the new API
+        this.subscribers.forEach(cb => {
+          try { cb(data); } catch (e) { console.error('subscriber cb error', e); }
+        });
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
@@ -70,6 +105,16 @@ class WebSocketService {
         this.emit('emergency_update', data.emergency);
         break;
         
+      case 'new-emergency-alert':
+        console.log('New emergency alert received:', data.emergency);
+        this.emit('emergency_update', data.emergency);
+        break;
+        
+      case 'subscription-ack':
+        console.log('Subscribed to emergency alerts successfully');
+        this.emit('subscription-ack', data);
+        break;
+        
       case 'error':
         console.error('WebSocket error:', data.message);
         this.emit('error', data);
@@ -89,15 +134,20 @@ class WebSocketService {
       console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
       
       setTimeout(() => {
-        AsyncStorage.getItem('authToken')
-          .then(token => {
-            if (token) {
-              this.connect(token);
-            }
-          })
-          .catch(error => {
-            console.error('Error retrieving auth token for reconnection:', error);
-          });
+        if (this.token) {
+          this.connect(this.token);
+        } else {
+          AsyncStorage.getItem('authToken')
+            .then(token => {
+              if (token) {
+                this.token = token;
+                this.connect(token);
+              }
+            })
+            .catch(error => {
+              console.error('Error retrieving auth token for reconnection:', error);
+            });
+        }
       }, this.reconnectInterval);
     } else {
       console.log('Max reconnection attempts reached');
@@ -123,7 +173,7 @@ class WebSocketService {
    */
   sendEmergencyUpdate(emergency) {
     this.sendMessage({
-      type: 'emergency_update',
+      type: 'new-emergency-alert',
       emergency: emergency
     });
   }
@@ -171,6 +221,18 @@ class WebSocketService {
       this.client = null;
     }
     this.listeners = {};
+    this.token = null;
+    this.subscribers.clear();
+  }
+  
+  /**
+   * Subscribe to all WebSocket messages (new API)
+   * @param {Function} callback - Function to call when messages arrive
+   * @returns {Function} Unsubscribe function
+   */
+  subscribe(callback) {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
   }
 }
 

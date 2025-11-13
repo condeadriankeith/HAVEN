@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
-import { authAPI, storeToken } from '../services/api';
+import { authAPI } from '../services/api';
 
-const LoginScreen = ({ navigation }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const LoginScreen = ({ navigation, onLogin }) => {
+  const [email, setEmail] = useState('admin@example.com');
+  const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -20,20 +20,30 @@ const LoginScreen = ({ navigation }) => {
       const response = await authAPI.login({ email, password });
       
       if (response.status === 200) {
-        // Store the auth token
-        await storeToken(response.data.token);
-        
-        // Reset the navigation stack and navigate to main tabs
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
+        // Notify the app that login was successful
+        if (onLogin) {
+          onLogin();
+        }
         
         Alert.alert('Success', 'Logged in successfully');
       }
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('Error', 'Invalid credentials. Please try again.');
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Network Error: Cannot connect to the server. Please check that:\n\n1. Your device is on the same Wi-Fi network as your computer\n2. The server is running on your computer\n3. Windows Firewall is not blocking the connection\n4. The IP address in api.js is correct';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
+      if (error.response && error.response.data && error.response.data.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      Alert.alert('Login Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -43,6 +53,16 @@ const LoginScreen = ({ navigation }) => {
     // For now, we'll just show an alert
     // In a full implementation, you would create a RegisterScreen component
     Alert.alert('Register', 'Registration would be implemented here');
+  };
+
+  // Function to login with default credentials
+  const handleDefaultLogin = async () => {
+    setEmail('admin@example.com');
+    setPassword('admin123');
+    // Automatically trigger login after setting default credentials
+    setTimeout(() => {
+      handleLogin();
+    }, 100);
   };
 
   return (
@@ -83,6 +103,16 @@ const LoginScreen = ({ navigation }) => {
         >
           <Text style={styles.loginButtonText}>
             {loading ? 'Logging in...' : 'Login'}
+          </Text>
+        </TouchableOpacity>
+        
+        {/* Default login button for testing */}
+        <TouchableOpacity 
+          style={[styles.defaultLoginButton]} 
+          onPress={handleDefaultLogin}
+        >
+          <Text style={styles.defaultLoginButtonText}>
+            Use Default Credentials
           </Text>
         </TouchableOpacity>
         
@@ -131,8 +161,7 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 50,
-    borderWidth: 1,
-    borderColor: COLORS.accentGray,
+    backgroundColor: COLORS.secondaryBackground,
     borderRadius: 4,
     paddingHorizontal: SPACING.small,
     fontSize: TYPOGRAPHY.body.fontSize,
@@ -149,6 +178,20 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: COLORS.primaryBackground,
+    fontSize: TYPOGRAPHY.button.fontSize,
+    fontWeight: TYPOGRAPHY.button.fontWeight,
+  },
+  defaultLoginButton: {
+    backgroundColor: COLORS.primaryBackground,
+    borderColor: COLORS.accentRed,
+    borderWidth: 1,
+    paddingVertical: SPACING.medium,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginTop: SPACING.small,
+  },
+  defaultLoginButtonText: {
+    color: COLORS.accentRed,
     fontSize: TYPOGRAPHY.button.fontSize,
     fontWeight: TYPOGRAPHY.button.fontWeight,
   },

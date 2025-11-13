@@ -63,7 +63,8 @@ async function readCSV(fileName) {
     }
     
     const data = fs.readFileSync(filePath, 'utf8');
-    const lines = data.trim().split('\n');
+    // Handle both Windows (\r\n) and Unix (\n) line endings
+    const lines = data.trim().split(/\r?\n/);
     
     if (lines.length === 0 || (lines.length === 1 && lines[0].trim() === '')) return [];
     
@@ -207,7 +208,8 @@ async function appendToCSV(fileName, rowData) {
     } else {
       // Read headers from existing file
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      const lines = fileContent.split('\n');
+      // Handle both Windows (\r\n) and Unix (\n) line endings
+      const lines = fileContent.split(/\r?\n/);
       if (lines.length > 0 && lines[0].trim() !== '') {
         headers = lines[0].split(',').map(h => h.trim());
       }

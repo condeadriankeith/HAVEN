@@ -13,7 +13,7 @@ require('dotenv').config();
 const { readCSV, writeCSV, appendToCSV } = require('./csvHandler');
 
 // Import WebSocket server
-const { initializeWebSocketServer, broadcastEmergencyUpdate } = require('./websocketServer');
+const { initializeWebSocketServer, broadcastEmergencyUpdate, broadcastEmergencyStatusUpdate } = require('./websocketServer');
 
 // Define the database directory
 const DATABASE_DIR = path.join(__dirname, 'database');
@@ -43,6 +43,8 @@ async function ensureAdminUser() {
       await writeCSV('users.csv', updatedUsers, headers);
       
       console.log('Default admin user created.');
+    } else {
+      console.log('Admin user already exists.');
     }
   } catch (error) {
     console.error('Error ensuring admin user exists:', error);
@@ -53,17 +55,40 @@ async function ensureAdminUser() {
 async function clearCSVFiles() {
   try {
     // Clear emergencies.csv
-    const emergenciesHeaders = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+    const emergenciesHeaders = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'userPets', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
     await writeCSV('emergencies.csv', [], emergenciesHeaders);
     
     // Clear responders.csv
     const respondersHeaders = ['id', 'name', 'organization', 'phone', 'email', 'specialty', 'latitude', 'longitude', 'status', 'lastActive'];
     await writeCSV('responders.csv', [], respondersHeaders);
     
-    // Ensure admin user exists
-    await ensureAdminUser();
+    // Clear users.csv but preserve the default admin user
+    const usersHeaders = ['id', 'email', 'phone', 'firstName', 'lastName', 'address', 'role', 'password'];
+    const users = await readCSV('users.csv');
+    const adminUser = users.find(user => user.email === 'admin@example.com');
     
-    console.log('CSV files cleared successfully. Admin user preserved.');
+    // If admin user exists, preserve it; otherwise create a new one
+    let usersToKeep = [];
+    if (adminUser) {
+      usersToKeep = [adminUser];
+    } else {
+      // Create default admin user
+      const defaultAdmin = {
+        id: 'USR-0001',
+        email: 'admin@example.com',
+        phone: '123-456-7890',
+        firstName: 'Admin',
+        lastName: 'User',
+        address: 'Default Admin Address',
+        role: 'admin',
+        password: '$2a$10$G54sq85aYb484xKVawJfSOo5Lbop8/NywuR4ODvM9YKuo.HCaKQ8y' // bcrypt hash for "admin123"
+      };
+      usersToKeep = [defaultAdmin];
+    }
+    
+    await writeCSV('users.csv', usersToKeep, usersHeaders);
+    
+    console.log('CSV files cleared successfully. Only admin user preserved.');
   } catch (error) {
     console.error('Error clearing CSV files:', error);
   }
@@ -177,15 +202,12 @@ app.use(express.json());
         }
         
         // Save updated emergencies to CSV
-        const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+        const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'userPets', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
         await writeCSV('emergencies.csv', emergencies, headers);
         
-        // Broadcast status change to all clients
+        // Broadcast status change to all clients using the new function
         const updatedEmergency = emergencies[emergencyIndex];
-        io.to('emergency-alerts').emit('emergency-status-changed', {
-          type: 'emergency-status-changed',
-          emergency: updatedEmergency
-        });
+        broadcastEmergencyStatusUpdate(updatedEmergency);
         
         socket.emit('status-update-ack', { success: true, emergency: updatedEmergency });
         console.log(`Emergency ${emergencyId} status updated to ${newStatus}`);
@@ -223,6 +245,17 @@ app.use(express.json());
           return;
         }
         
+        // Parse user pets
+        let userPets = [];
+        if (user.pets) {
+          try {
+            userPets = JSON.parse(user.pets);
+          } catch (e) {
+            console.error('Error parsing user pets:', e);
+            userPets = [];
+          }
+        }
+        
         // Generate emergency ID if not provided
         const emergencyId = emergency.emergencyId || await generateEmergencyId();
         
@@ -233,6 +266,7 @@ app.use(express.json());
           userName: emergency.contactInfo?.name || `${user.firstName} ${user.lastName}`,
           userPhone: emergency.contactInfo?.phone || user.phone,
           userEmail: emergency.contactInfo?.email || user.email,
+          userPets: JSON.stringify(userPets), // Include user's pets in the emergency record
           latitude: emergency.latitude,
           longitude: emergency.longitude,
           address: emergency.address || `Approximate location: ${emergency.latitude.toFixed(6)}, ${emergency.longitude.toFixed(6)}`,
@@ -247,23 +281,27 @@ app.use(express.json());
           updatedAt: new Date().toISOString()
         };
         
-        console.log('Emergency data to save:', emergencyData);
+        console.log('Emergency data to save via WebSocket:', emergencyData);
         
         // Save emergency record to database
-        const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+        const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'userPets', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
         await appendToCSV('emergencies.csv', emergencyData);
         
-        // Broadcast emergency to all connected clients
+        // Broadcast emergency to all connected clients through both mechanisms
+        // Via Socket.IO
         io.to('emergency-alerts').emit('new-emergency-alert', {
           type: 'new-emergency-alert',
           emergency: emergencyData
         });
         
+        // Via WebSocket server
+        broadcastEmergencyUpdate(emergencyData);
+        
         socket.emit('emergency-ack', { success: true, emergencyId });
-        console.log('Emergency alert processed and broadcasted:', emergencyId);
+        console.log(`New emergency alert created: ${emergencyId}`);
       } catch (error) {
-        console.error('Error processing emergency alert:', error);
-        socket.emit('error', { message: 'Failed to process emergency alert' });
+        console.error('Error creating emergency alert via WebSocket:', error);
+        socket.emit('error', { message: 'Failed to create emergency alert' });
       }
     });
     
@@ -395,15 +433,18 @@ app.post('/api/v1/logs', (req, res) => {
 // User registration
 app.post('/api/v1/auth/register', async (req, res) => {
   try {
-    const { email, phone, password, firstName, lastName, address } = req.body;
+    const { email, phone, password, firstName, lastName, address, pets } = req.body;
 
     // Read users from CSV
     const users = await readCSV('users.csv');
     
-    // Check if user already exists
-    const existingUser = users.find(u => u.email === email || u.phone === phone);
+    // Check if user already exists (but exclude the default admin)
+    const existingUser = users.find(u => 
+      (u.email === email || u.phone === phone) && 
+      u.email !== 'admin@example.com' // Allow re-registration with admin email for testing
+    );
     if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
+      return res.status(400).json({ error: 'User already exists with this email or phone number' });
     }
 
     // Hash password
@@ -417,9 +458,10 @@ app.post('/api/v1/auth/register', async (req, res) => {
       phone,
       firstName,
       lastName,
-      address,
+      address: address || '',
       role: 'pet_owner',
-      password: hashedPassword
+      password: hashedPassword,
+      pets: pets ? JSON.stringify(pets) : '[]' // Store pets as JSON string
     };
 
     // Save user to CSV
@@ -441,7 +483,8 @@ app.post('/api/v1/auth/register', async (req, res) => {
       token
     });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error during registration' });
   }
 });
 
@@ -512,6 +555,17 @@ app.get('/api/v1/users/profile', authenticateToken, async (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
+  // Parse pets JSON if it exists
+  let pets = [];
+  if (user.pets) {
+    try {
+      pets = JSON.parse(user.pets);
+    } catch (e) {
+      console.error('Error parsing pets JSON:', e);
+      pets = [];
+    }
+  }
+
   res.json({
     id: user.id,
     email: user.email,
@@ -519,7 +573,8 @@ app.get('/api/v1/users/profile', authenticateToken, async (req, res) => {
     lastName: user.lastName,
     phone: user.phone,
     address: user.address,
-    role: user.role
+    role: user.role,
+    pets: pets
   });
 });
 
@@ -586,7 +641,7 @@ app.post('/api/v1/emergencies/alert', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get user data
+    // Get user data including pets
     const user = await getUserById(userId);
     if (!user) {
       return res.status(404).json({ 
@@ -596,57 +651,62 @@ app.post('/api/v1/emergencies/alert', authenticateToken, async (req, res) => {
       });
     }
 
-    // Generate unique emergency ID
-    const emergencyId = await generateEmergencyId();
-    console.log('Generated emergency ID:', emergencyId);
+    // Parse user pets
+    let userPets = [];
+    if (user.pets) {
+      try {
+        userPets = JSON.parse(user.pets);
+      } catch (e) {
+        console.error('Error parsing user pets:', e);
+        userPets = [];
+      }
+    }
 
-    // Add server-side timestamp if client timestamp is missing
-    const serverTimestamp = timestamp || new Date().toISOString();
-
-    // If address is not provided, use reverse geocoding placeholder
-    const address = location.address || `Approximate location: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
-
-    // Create emergency record
+    // Create emergency record with user information including pets
     const emergencyData = {
-      emergencyId,
-      userId,
-      userName: contactInfo?.name || `${user.firstName} ${user.lastName}`,
-      userPhone: contactInfo?.phone || user.phone,
-      userEmail: contactInfo?.email || user.email,
+      emergencyId: await generateEmergencyId(),
+      userId: userId,
+      userName: `${user.firstName} ${user.lastName}`,
+      userPhone: user.phone || '',
+      userEmail: user.email || '',
+      userPets: JSON.stringify(userPets), // Include user's pets in the emergency record
       latitude: location.latitude,
       longitude: location.longitude,
-      address,
+      address: location.address || `Approximate location: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`,
       emergencyType: emergencyType || 'Pet Health Emergency',
       status: 'ACTIVE',
-      reportedAt: serverTimestamp,
+      reportedAt: timestamp || new Date().toISOString(),
       respondedAt: '',
       resolvedAt: '',
       assignedResponderId: '',
       notes: additionalDetails || '',
-      createdAt: serverTimestamp,
-      updatedAt: serverTimestamp
+      createdAt: timestamp || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
-
+    
     console.log('Emergency data to save:', emergencyData);
-
-    // Save emergency record to database with status "ACTIVE"
-    const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+    
+    // Save emergency record to database
+    const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'userPets', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
     await appendToCSV('emergencies.csv', emergencyData);
-
-    // Broadcast emergency data to all connected desktop clients via Socket.IO
-    broadcastEmergency(emergencyData);
-
-    // Return success response with emergency ID
-    res.status(201).json({
-      success: true,
-      emergencyId,
-      message: 'Emergency report received and broadcast',
-      timestamp: serverTimestamp
+    
+    // Broadcast emergency to all connected clients through both mechanisms
+    // Via Socket.IO
+    io.to('emergency-alerts').emit('new-emergency-alert', {
+      type: 'new-emergency-alert',
+      emergency: emergencyData
     });
     
-    console.log('Emergency report successfully processed and broadcasted');
+    // Via WebSocket server
+    broadcastEmergencyUpdate(emergencyData);
+    
+    res.status(201).json({
+      success: true,
+      emergency: emergencyData,
+      message: 'Emergency alert created successfully'
+    });
   } catch (error) {
-    console.error('Error creating emergency report:', error);
+    console.error('Emergency alert error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Internal server error', 
@@ -666,6 +726,43 @@ app.get('/api/v1/emergencies/active', authenticateToken, async (req, res) => {
   res.json({
     emergencies: activeEmergencies,
     total: activeEmergencies.length
+  });
+});
+
+// Get all users (admin only)
+app.get('/api/v1/users', authenticateToken, async (req, res) => {
+  // Only allow admin users to fetch all users
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Admin only.' });
+  }
+  
+  // Read users from CSV
+  const users = await readCSV('users.csv');
+  
+  // Return users without passwords and with parsed pets
+  const usersWithoutPasswords = users.map(user => {
+    const { password, pets, ...userWithoutPassword } = user;
+    
+    // Parse pets JSON if it exists
+    let parsedPets = [];
+    if (pets) {
+      try {
+        parsedPets = JSON.parse(pets);
+      } catch (e) {
+        console.error('Error parsing pets JSON for user:', user.id, e);
+        parsedPets = [];
+      }
+    }
+    
+    return {
+      ...userWithoutPassword,
+      pets: parsedPets
+    };
+  });
+  
+  res.json({
+    users: usersWithoutPasswords,
+    total: usersWithoutPasswords.length
   });
 });
 
@@ -689,7 +786,7 @@ app.put('/api/v1/emergencies/:emergencyId', authenticateToken, async (req, res) 
     emergencies[emergencyIndex].updatedAt = new Date().toISOString();
     
     // Write updated emergencies back to CSV
-    const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
+    const headers = ['emergencyId', 'userId', 'userName', 'userPhone', 'userEmail', 'userPets', 'latitude', 'longitude', 'address', 'emergencyType', 'status', 'reportedAt', 'respondedAt', 'resolvedAt', 'assignedResponderId', 'notes', 'createdAt', 'updatedAt'];
     await writeCSV('emergencies.csv', emergencies, headers);
     
     // Broadcast emergency update via WebSocket
@@ -704,10 +801,60 @@ app.put('/api/v1/emergencies/:emergencyId', authenticateToken, async (req, res) 
   }
 });
 
+// Get emergency statistics (admin only)
+app.get('/api/v1/emergencies/statistics', authenticateToken, async (req, res) => {
+  // Only allow admin users to fetch statistics
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied. Admin only.' });
+  }
+  
+  try {
+    // Read emergencies from CSV
+    const emergencies = await readCSV('emergencies.csv');
+    
+    // Calculate statistics
+    const totalReports = emergencies.length;
+    const activeReports = emergencies.filter(e => e.status === 'ACTIVE').length;
+    const processedReports = emergencies.filter(e => e.status === 'RESPONDING' || e.status === 'RESOLVED').length;
+    
+    // Calculate average response time
+    let totalResponseTime = 0;
+    let validResponseCount = 0;
+    
+    emergencies.forEach(emergency => {
+      if (emergency.reportedAt && emergency.respondedAt) {
+        const reportedTime = new Date(emergency.reportedAt);
+        const respondedTime = new Date(emergency.respondedAt);
+        const responseTime = (respondedTime - reportedTime) / 1000; // in seconds
+        
+        if (responseTime >= 0) {
+          totalResponseTime += responseTime;
+          validResponseCount++;
+        }
+      }
+    });
+    
+    const averageResponseTime = validResponseCount > 0 ? totalResponseTime / validResponseCount : 0;
+    
+    res.json({
+      totalReports,
+      activeReports,
+      processedReports,
+      averageResponseTime: Math.round(averageResponseTime), // in seconds
+      statisticsCalculatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error calculating emergency statistics:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Function to start server with port fallback
 function startServer(server, port, retries = 5) {
-  server.listen(port, () => {
+  // Bind to all network interfaces to accept connections from other devices
+  server.listen(port, '0.0.0.0', () => {
     console.log(`HAVEN API Server running on port ${port}`);
+    console.log(`Server accessible from other devices on the network`);
     // Initialize WebSocket server on the same server instance
     initializeWebSocketServer(server);
   });
@@ -718,7 +865,7 @@ function startServer(server, port, retries = 5) {
         const nextPort = port + 1;
         console.log(`Port ${port} is already in use, trying ${nextPort}...`);
         // Try the next port
-        startServer(nextPort, retries - 1);
+        startServer(server, nextPort, retries - 1);
       } else {
         console.error('Unable to find an available port after 5 attempts');
         process.exit(1);

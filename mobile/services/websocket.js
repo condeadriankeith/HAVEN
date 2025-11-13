@@ -1,14 +1,19 @@
 import { w3cwebsocket as W3CWebSocket } from 'websocket';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CONFIG from '../config';
 
-// Get WebSocket URL based on platform
+// Get WebSocket URL based on platform and environment variables
 const getWebSocketUrl = () => {
+  // Try to get from config first
+  if (CONFIG.WEBSOCKET_URL) {
+    return CONFIG.WEBSOCKET_URL;
+  }
+  
   if (__DEV__) {
     // Check if running on web or mobile
     if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
-      // For mobile devices, use your computer's IP address
-      // Using the IP address we found: 192.168.254.102
-      return 'ws://192.168.254.102:3000';
+      // For mobile devices, use localhost as fallback
+      return 'ws://localhost:3000';
     } else {
       // For web browser, use localhost
       return 'ws://localhost:3000';
@@ -172,10 +177,34 @@ class WebSocketService {
    * @param {Object} emergency - Emergency data to send
    */
   sendEmergencyUpdate(emergency) {
-    this.sendMessage({
+    // Ensure the emergency data has proper structure for the desktop app
+    const emergencyData = {
       type: 'new-emergency-alert',
-      emergency: emergency
-    });
+      emergency: {
+        ...emergency,
+        // Ensure location data is properly structured
+        location: emergency.location || {
+          latitude: emergency.latitude,
+          longitude: emergency.longitude,
+          accuracy: emergency.accuracy || 0,
+          altitude: emergency.altitude || 0,
+          heading: emergency.heading || 0,
+          speed: emergency.speed || 0,
+          address: emergency.address || ''
+        }
+      }
+    };
+    
+    // Remove flat location properties if they exist since we're using nested structure
+    if (emergencyData.emergency.latitude !== undefined) delete emergencyData.emergency.latitude;
+    if (emergencyData.emergency.longitude !== undefined) delete emergencyData.emergency.longitude;
+    if (emergencyData.emergency.accuracy !== undefined) delete emergencyData.emergency.accuracy;
+    if (emergencyData.emergency.altitude !== undefined) delete emergencyData.emergency.altitude;
+    if (emergencyData.emergency.heading !== undefined) delete emergencyData.emergency.heading;
+    if (emergencyData.emergency.speed !== undefined) delete emergencyData.emergency.speed;
+    if (emergencyData.emergency.address !== undefined) delete emergencyData.emergency.address;
+    
+    this.sendMessage(emergencyData);
   }
 
   /**

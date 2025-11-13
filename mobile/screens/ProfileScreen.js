@@ -1,25 +1,132 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
+import { authAPI } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ProfileScreen = () => {
   const [userData, setUserData] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '(555) 123-4567',
-    address: '123 Main St, City, State 12345',
-    petName: 'Buddy',
-    petBreed: 'Golden Retriever',
-    petAge: '3 years'
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    petName: '',
+    petBreed: '',
+    petAge: ''
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [isEditing, setIsEditing] = useState(false);
 
-  const handleSave = () => {
-    // In a real app, this would save to the API
-    setIsEditing(false);
-    Alert.alert('Success', 'Profile updated successfully');
+  useEffect(() => {
+    fetchProfileData();
+  }, []);
+
+  const fetchProfileData = async () => {
+    try {
+      setLoading(true);
+      const response = await authAPI.getProfile();
+      
+      if (response.data) {
+        // Parse pet information if it exists
+        let petName = '';
+        let petBreed = '';
+        let petAge = '';
+        
+        if (response.data.pets && response.data.pets.length > 0) {
+          const pet = response.data.pets[0]; // Take the first pet for simplicity
+          petName = pet.name || '';
+          petBreed = pet.breed || '';
+          petAge = pet.age || '';
+        }
+        
+        setUserData({
+          firstName: response.data.firstName || '',
+          lastName: response.data.lastName || '',
+          email: response.data.email || '',
+          phone: response.data.phone || '',
+          address: response.data.address || '',
+          petName: petName,
+          petBreed: petBreed,
+          petAge: petAge
+        });
+        
+        // Store user data in AsyncStorage for quick access
+        await AsyncStorage.setItem('userName', `${response.data.firstName} ${response.data.lastName}`);
+        await AsyncStorage.setItem('userPhone', response.data.phone || '');
+        await AsyncStorage.setItem('userEmail', response.data.email || '');
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      setError('Failed to load profile data');
+      // Load from AsyncStorage as fallback
+      loadFromStorage();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFromStorage = async () => {
+    try {
+      const firstName = await AsyncStorage.getItem('firstName') || '';
+      const lastName = await AsyncStorage.getItem('lastName') || '';
+      const email = await AsyncStorage.getItem('userEmail') || '';
+      const phone = await AsyncStorage.getItem('userPhone') || '';
+      
+      setUserData(prev => ({
+        ...prev,
+        firstName,
+        lastName,
+        email,
+        phone
+      }));
+    } catch (err) {
+      console.error('Error loading from storage:', err);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      // Prepare pet data
+      const pets = [];
+      if (userData.petName || userData.petBreed || userData.petAge) {
+        pets.push({
+          name: userData.petName,
+          breed: userData.petBreed,
+          age: userData.petAge,
+          type: 'Pet' // Default type
+        });
+      }
+      
+      // Update profile with pet information
+      const profileData = {
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        phone: userData.phone,
+        address: userData.address,
+        pets: pets
+      };
+      
+      // In a real app, this would save to the API
+      // For now, we'll just save to AsyncStorage
+      await AsyncStorage.setItem('firstName', userData.firstName);
+      await AsyncStorage.setItem('lastName', userData.lastName);
+      await AsyncStorage.setItem('userEmail', userData.email);
+      await AsyncStorage.setItem('userPhone', userData.phone);
+      
+      // Save pet information
+      await AsyncStorage.setItem('userPets', JSON.stringify(pets));
+      
+      setIsEditing(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      Alert.alert('Error', 'Failed to save profile data');
+    }
   };
 
   const handleLogout = () => {
@@ -36,13 +143,39 @@ const ProfileScreen = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.accentRed} />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchProfileData}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Profile</Text>
       
       <View style={styles.profileHeader}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>JD</Text>
+          <Text style={styles.avatarText}>
+            {userData.firstName?.charAt(0)}{userData.lastName?.charAt(0)}
+          </Text>
         </View>
         <Text style={styles.profileName}>{userData.firstName} {userData.lastName}</Text>
         <Text style={styles.profileEmail}>{userData.email}</Text>
@@ -175,7 +308,7 @@ const ProfileScreen = () => {
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -183,17 +316,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primaryBackground,
-    padding: SPACING.medium,
+    padding: SPACING.lg,
   },
   title: {
     fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.large,
+    marginBottom: SPACING.xl,
+    textAlign: 'center',
   },
   profileHeader: {
     alignItems: 'center',
-    marginBottom: SPACING.large * 2,
+    marginBottom: SPACING.xl,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.secondaryBackground,
+    borderRadius: 12,
   },
   avatar: {
     width: 80,
@@ -202,64 +339,106 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentRed,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.medium,
+    marginBottom: SPACING.md,
   },
   avatarText: {
     color: COLORS.primaryBackground,
     fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: 'bold',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.body.fontSize,
+    color: COLORS.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.body.fontSize,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
+  },
+  retryButton: {
+    backgroundColor: COLORS.accentRed,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: COLORS.primaryBackground,
+    fontSize: TYPOGRAPHY.button.fontSize,
+    fontWeight: TYPOGRAPHY.button.fontWeight,
+  },
   profileName: {
     fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
   },
   profileEmail: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textSecondary,
   },
   form: {
-    marginBottom: SPACING.large,
+    marginBottom: SPACING.xl,
   },
   formGroup: {
-    marginBottom: SPACING.medium,
+    marginBottom: SPACING.lg,
   },
   label: {
-    fontSize: TYPOGRAPHY.secondary.fontSize,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.small,
+    fontSize: TYPOGRAPHY.body.fontSize,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+    fontWeight: '600',
   },
   input: {
     height: 50,
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 4,
-    paddingHorizontal: SPACING.small,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
     fontSize: TYPOGRAPHY.body.fontSize,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   value: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textPrimary,
-    paddingVertical: SPACING.small,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: COLORS.secondaryBackground,
+    borderRadius: 8,
   },
   sectionHeader: {
-    marginTop: SPACING.large,
-    marginBottom: SPACING.medium,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: TYPOGRAPHY.subtitle.fontSize,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
   actions: {
-    marginTop: SPACING.large,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.xl,
   },
   editButton: {
     backgroundColor: COLORS.secondaryBackground,
-    paddingVertical: SPACING.medium,
-    borderRadius: 4,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
     alignItems: 'center',
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   editButtonText: {
     color: COLORS.textPrimary,
@@ -268,10 +447,10 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: COLORS.accentRed,
-    paddingVertical: SPACING.medium,
-    borderRadius: 4,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
     alignItems: 'center',
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
   },
   saveButtonText: {
     color: COLORS.primaryBackground,
@@ -280,9 +459,11 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     backgroundColor: 'transparent',
-    paddingVertical: SPACING.medium,
-    borderRadius: 4,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.accentRed,
   },
   logoutButtonText: {
     color: COLORS.accentRed,

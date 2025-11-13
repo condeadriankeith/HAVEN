@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
 import { authAPI } from '../services/api';
+import { useResponsiveDimensions } from '../hooks/useResponsiveDimensions';
+import { scale, verticalScale, moderateScale } from '../utils/responsive';
 
 const LoginScreen = ({ navigation, onLogin }) => {
+  const { width, height, aspectRatio } = useResponsiveDimensions();
   const [email, setEmail] = useState('admin@example.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
@@ -31,12 +34,9 @@ const LoginScreen = ({ navigation, onLogin }) => {
       console.error('Login error:', error);
       let errorMessage = 'Login failed. Please try again.';
       
+      // Use the more specific error message if available
       if (error.message) {
-        if (error.message.includes('Network Error')) {
-          errorMessage = 'Network Error: Cannot connect to the server. Please check that:\n\n1. Your device is on the same Wi-Fi network as your computer\n2. The server is running on your computer\n3. Windows Firewall is not blocking the connection\n4. The IP address in api.js is correct';
-        } else {
-          errorMessage = `Error: ${error.message}`;
-        }
+        errorMessage = error.message;
       }
       
       if (error.response && error.response.data && error.response.data.error) {
@@ -50,9 +50,8 @@ const LoginScreen = ({ navigation, onLogin }) => {
   };
 
   const handleRegister = () => {
-    // For now, we'll just show an alert
-    // In a full implementation, you would create a RegisterScreen component
-    Alert.alert('Register', 'Registration would be implemented here');
+    // Navigate to registration screen
+    navigation.navigate('Register');
   };
 
   // Function to login with default credentials
@@ -131,83 +130,83 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primaryBackground,
-    padding: SPACING.medium,
+    padding: moderateScale(SPACING.md),
     justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: SPACING.large * 2,
+    marginBottom: moderateScale(SPACING.lg * 2),
   },
   title: {
-    fontSize: 36,
-    fontWeight: 'bold',
+    fontSize: moderateScale(36),
+    fontWeight: '700',
     color: COLORS.accentRed,
-    marginBottom: SPACING.small,
+    marginBottom: moderateScale(SPACING.sm),
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
   },
   form: {
     width: '100%',
   },
   formGroup: {
-    marginBottom: SPACING.medium,
+    marginBottom: moderateScale(SPACING.md),
   },
   label: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textPrimary,
-    marginBottom: SPACING.small,
+    marginBottom: moderateScale(SPACING.sm),
   },
   input: {
-    height: 50,
+    height: verticalScale(50),
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 4,
-    paddingHorizontal: SPACING.small,
-    fontSize: TYPOGRAPHY.body.fontSize,
+    borderRadius: moderateScale(4),
+    paddingHorizontal: moderateScale(SPACING.sm),
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
   },
   loginButton: {
     backgroundColor: COLORS.accentRed,
-    paddingVertical: SPACING.medium,
-    borderRadius: 4,
+    paddingVertical: moderateScale(SPACING.md),
+    borderRadius: moderateScale(4),
     alignItems: 'center',
-    marginTop: SPACING.large,
+    marginTop: moderateScale(SPACING.lg),
   },
   loginButtonDisabled: {
     backgroundColor: COLORS.accentGray,
   },
   loginButtonText: {
     color: COLORS.primaryBackground,
-    fontSize: TYPOGRAPHY.button.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.button.fontSize),
     fontWeight: TYPOGRAPHY.button.fontWeight,
   },
   defaultLoginButton: {
     backgroundColor: COLORS.primaryBackground,
     borderColor: COLORS.accentRed,
-    borderWidth: 1,
-    paddingVertical: SPACING.medium,
-    borderRadius: 4,
+    borderWidth: moderateScale(1),
+    paddingVertical: moderateScale(SPACING.md),
+    borderRadius: moderateScale(4),
     alignItems: 'center',
-    marginTop: SPACING.small,
+    marginTop: moderateScale(SPACING.sm),
   },
   defaultLoginButtonText: {
     color: COLORS.accentRed,
-    fontSize: TYPOGRAPHY.button.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.button.fontSize),
     fontWeight: TYPOGRAPHY.button.fontWeight,
   },
   footer: {
     alignItems: 'center',
-    marginTop: SPACING.large * 2,
+    marginTop: moderateScale(SPACING.lg * 2),
   },
   footerText: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
   },
   registerLink: {
     color: COLORS.accentRed,
-    fontSize: TYPOGRAPHY.body.fontSize,
-    fontWeight: 'bold',
-    marginTop: SPACING.small,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
+    fontWeight: '600',
+    marginTop: moderateScale(SPACING.sm),
   },
 });
 

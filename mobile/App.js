@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
 import MapScreen from './screens/MapScreen';
 import ReportsScreen from './screens/HistoryScreen';
@@ -16,9 +17,10 @@ import ReportFormScreen from './screens/ReportForm';
 
 // Components
 import EmergencyButton from './components/EmergencyButton';
+import SafeAreaWrapper from './components/SafeAreaWrapper';
 
 // Services
-import { clearToken } from './services/api';
+import { clearToken, clearEmergencyData } from './services/api';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -99,6 +101,8 @@ export default function App() {
     try {
       // Clear all authentication tokens to ensure clean start
       await clearToken();
+      // Clear any emergency data
+      await clearEmergencyData();
       setIsLoggedIn(false);
     } catch (error) {
       console.error('Error clearing tokens:', error);
@@ -127,16 +131,21 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isLoggedIn ? (
-          <Stack.Screen name="MainTabs" component={MainTabs} />
-        ) : (
-          <Stack.Screen name="Login">
-            {(props) => <LoginScreen {...props} onLogin={handleLogin} />}
-          </Stack.Screen>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaWrapper>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {isLoggedIn ? (
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+          ) : (
+            <>
+              <Stack.Screen name="Login">
+                {(props) => <LoginScreen {...props} onLogin={handleLogin} />}
+              </Stack.Screen>
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaWrapper>
   );
 }

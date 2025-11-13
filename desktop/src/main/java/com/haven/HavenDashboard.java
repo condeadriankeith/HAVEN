@@ -5,9 +5,12 @@ import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import java.util.Timer;
@@ -29,7 +32,14 @@ public class HavenDashboard extends JFrame {
     private WebSocketClient webSocketClient;
 
     // User data model
-    private List<User> users = new ArrayList<>();
+    private List<User> allUsers = new ArrayList<>();
+    private List<User> onlineUsers = new ArrayList<>();
+
+    // Add fields to track emergency statistics
+    private int totalReports = 0;
+    private int activeReports = 0;
+    private long totalResponseTime = 0;
+    private int resolvedReports = 0;
 
     public HavenDashboard() {
         setTitle("HAVEN - Pet Emergency Response Dashboard");
@@ -41,7 +51,7 @@ public class HavenDashboard extends JFrame {
         // Initialize API service
         apiService = ApiService.getInstance();
         
-        // Initialize sample user data
+        // Initialize user data
         initializeUserData();
         
         initUI();
@@ -89,6 +99,8 @@ public class HavenDashboard extends JFrame {
             });
             
             // Connect without authentication token for prototype as per project requirements
+            // Add a small delay to ensure the server is ready
+            Thread.sleep(1000);
             webSocketClient.connect(null);
             System.out.println("WebSocket connected for real-time updates without authentication (prototype mode)");
         } catch (Exception e) {
@@ -110,19 +122,35 @@ public class HavenDashboard extends JFrame {
                 
                 // Extract emergency data with proper field names from the backend
                 String id = emergency.has("emergencyId") ? emergency.get("emergencyId").getAsString() : 
-                           (emergency.has("id") ? emergency.get("id").getAsString() : "Unknown");
+                       (emergency.has("id") ? emergency.get("id").getAsString() : "Unknown");
                 String type = emergency.has("emergencyType") ? emergency.get("emergencyType").getAsString() : 
-                             (emergency.has("type") ? emergency.get("type").getAsString() : "Pet Emergency");
+                         (emergency.has("type") ? emergency.get("type").getAsString() : "Pet Emergency");
                 String description = emergency.has("notes") ? emergency.get("notes").getAsString() : 
-                                    (emergency.has("description") ? emergency.get("description").getAsString() : "Pet Emergency Reported");
+                                (emergency.has("description") ? emergency.get("description").getAsString() : "Pet Emergency Reported");
                 String status = emergency.has("status") ? emergency.get("status").getAsString() : "ACTIVE";
+            
+                // Extract user information
+                String userName = emergency.has("userName") ? emergency.get("userName").getAsString() : "User";
+                String userPhone = emergency.has("userPhone") ? emergency.get("userPhone").getAsString() : "";
+                String userEmail = emergency.has("userEmail") ? emergency.get("userEmail").getAsString() : "";
+                String userPets = emergency.has("userPets") ? emergency.get("userPets").getAsString() : "[]";
                 
+                // Create contact information string
+                String contactInfo = "";
+                if (!userPhone.isEmpty() && !userEmail.isEmpty()) {
+                    contactInfo = userPhone + " / " + userEmail;
+                } else if (!userPhone.isEmpty()) {
+                    contactInfo = userPhone;
+                } else if (!userEmail.isEmpty()) {
+                    contactInfo = userEmail;
+                }
+            
                 // Extract latitude and longitude, handling both flat and nested structures
                 double lat = 10.6951; // Default to Bacolod center
                 double lng = 122.9527; // Default to Bacolod center
-                
+            
                 System.out.println("Raw emergency data: " + emergency.toString());
-                
+            
                 // Check for nested structure (from WebSocket direct send)
                 if (emergency.has("location")) {
                     JsonObject location = emergency.getAsJsonObject("location");
@@ -139,39 +167,58 @@ public class HavenDashboard extends JFrame {
                     lng = emergency.get("longitude").getAsDouble();
                     System.out.println("Extracted coordinates from flat structure: " + lat + ", " + lng);
                 }
-                
+                // Check for nested emergency object (from mobile app WebSocket structure)
+                else if (emergency.has("emergency")) {
+                    JsonObject nestedEmergency = emergency.getAsJsonObject("emergency");
+                    if (nestedEmergency.has("location")) {
+                        JsonObject location = nestedEmergency.getAsJsonObject("location");
+                        if (location.has("latitude") && location.has("longitude")) {
+                            lat = location.get("latitude").getAsDouble();
+                            lng = location.get("longitude").getAsDouble();
+                            System.out.println("Extracted coordinates from nested emergency.location: " + lat + ", " + lng);
+                        }
+                    } else if (nestedEmergency.has("latitude") && nestedEmergency.has("longitude")) {
+                        lat = nestedEmergency.get("latitude").getAsDouble();
+                        lng = nestedEmergency.get("longitude").getAsDouble();
+                        System.out.println("Extracted coordinates from nested emergency: " + lat + ", " + lng);
+                    }
+                }
+            
                 // Validate coordinates are within reasonable bounds for Bacolod City
                 if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
                     System.err.println("Invalid coordinates detected: " + lat + ", " + lng + ". Using default Bacolod coordinates.");
                     lat = 10.6765;
                     lng = 122.9509;
                 }
-                
+            
                 System.out.println("Final coordinates to be used: " + lat + ", " + lng);
-                
+            
                 // Additional validation to prevent ocean coordinates
                 if (lat == 0 && lng == 0) {
                     System.err.println("Warning: Coordinates are 0,0 (middle of ocean). Using default Bacolod coordinates.");
                     lat = 10.6765;
                     lng = 122.9509;
                 }
-                
+            
                 // Extract location accuracy and other details if available
                 String address = emergency.has("address") ? emergency.get("address").getAsString() : 
-                                (emergency.has("location") && emergency.getAsJsonObject("location").has("address") ? 
-                                 emergency.getAsJsonObject("location").get("address").getAsString() : 
-                                 "Location in Bacolod City");
-                
+                            (emergency.has("location") && emergency.getAsJsonObject("location").has("address") ? 
+                             emergency.getAsJsonObject("location").get("address").getAsString() : 
+                             (emergency.has("emergency") && emergency.getAsJsonObject("emergency").has("location") && 
+                              emergency.getAsJsonObject("emergency").getAsJsonObject("location").has("address") ?
+                              emergency.getAsJsonObject("emergency").getAsJsonObject("location").get("address").getAsString() :
+                              "Location in Bacolod City"));
+            
                 System.out.println("Processing emergency update: " + id + " - " + type + " - " + status);
                 System.out.println("Emergency location: " + lat + ", " + lng);
-                
-                // Add to alert panel with full location details
+            
+                // Add to alert panel with full location details and pet information
                 String alertDescription = description + (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy") ?
-                    " (Accuracy: " + emergency.getAsJsonObject("location").get("accuracy").getAsDouble() + "m)" : 
-                    (emergency.has("accuracy") ? 
-                     " (Accuracy: " + emergency.get("accuracy").getAsDouble() + "m)" : ""));
-                alertPanel.addAlert(new AlertPanel.AlertData(type, alertDescription, "User", id, lat, lng));
-                
+                " (Accuracy: " + emergency.getAsJsonObject("location").get("accuracy").getAsDouble() + "m)" : 
+                (emergency.has("accuracy") ? 
+                 " (Accuracy: " + emergency.get("accuracy").getAsDouble() + "m)" : ""));
+                alertPanel.addAlert(new AlertPanel.AlertData(type, alertDescription, userName, id, lat, lng, userPets, contactInfo));
+            
                 // Add animated marker to map with proper title
                 String markerTitle = type + " (" + id + ")";
                 if (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy")) {
@@ -179,9 +226,12 @@ public class HavenDashboard extends JFrame {
                 } else if (emergency.has("accuracy")) {
                     markerTitle += " ±" + String.format("%.0f", emergency.get("accuracy").getAsDouble()) + "m";
                 }
-                mapPanel.addMarker(lat, lng, markerTitle, true); // Highlight the new marker
+                mapPanel.addMarker(lat, lng, markerTitle, true, id); // Highlight the new marker and pass the emergency ID
                 mapPanel.centerOn(lat, lng); // Center the map on the new emergency location
-                
+            
+                // Update analytics dashboard based on status
+                updateAnalyticsForEmergency(status, "NEW");
+            
                 // Show notification
                 showDesktopNotification("🚨 New Pet Emergency", 
                     "Emergency reported at coordinates: " + lat + ", " + lng);
@@ -191,6 +241,67 @@ public class HavenDashboard extends JFrame {
                 e.printStackTrace();
             }
         });
+    }
+
+    // Method to update analytics dashboard based on emergency status
+    private void updateAnalyticsForEmergency(String status, String updateType) {
+        // Update statistics based on emergency status
+        if ("NEW".equals(updateType)) {
+            // New emergency report
+            totalReports++;
+            if ("ACTIVE".equals(status)) {
+                activeReports++;
+            }
+        } else if ("ACTIVE".equals(status)) {
+            // Emergency became active
+            activeReports++;
+        } else if ("RESOLVED".equals(status)) {
+            // Emergency was resolved
+            if (activeReports > 0) {
+                activeReports--;
+                resolvedReports++;
+                // For demo purposes, we'll add a fixed response time
+                totalResponseTime += 300; // 5 minutes
+            }
+        }
+        
+        // Update the stat cards in the analytics panel
+        SwingUtilities.invokeLater(() -> {
+            updateStatCard("totalReportsCard", "Total Reports", String.valueOf(totalReports));
+            updateStatCard("activeReportsCard", "Active Reports", String.valueOf(activeReports));
+            
+            // Calculate and update average response time if we have resolved reports
+            if (resolvedReports > 0) {
+                long avgResponseTime = totalResponseTime / resolvedReports;
+                String avgResponseText = formatTime(avgResponseTime);
+                updateStatCard("avgResponseCard", "Avg. Response", avgResponseText);
+            }
+        });
+    }
+
+    // Overloaded method for backward compatibility
+    private void updateAnalyticsForEmergency(String status) {
+        updateAnalyticsForEmergency(status, "STATUS_CHANGE");
+    }
+
+    // Method to update analytics dashboard with current statistics for new emergencies
+    private void updateAnalyticsDashboard() {
+        // Increment total reports
+        totalReports++;
+        
+        // Update analytics for active status
+        updateAnalyticsForEmergency("ACTIVE", "NEW");
+    }
+    
+    // Helper method to format time in a readable format
+    private String formatTime(long seconds) {
+        if (seconds < 60) {
+            return seconds + "s";
+        } else if (seconds < 3600) {
+            return (seconds / 60) + "m";
+        } else {
+            return (seconds / 3600) + "h " + ((seconds % 3600) / 60) + "m";
+        }
     }
 
     private void showDesktopNotification(String title, String message) {
@@ -223,12 +334,73 @@ public class HavenDashboard extends JFrame {
     }
 
     private void initializeUserData() {
-        // In a real implementation, we would fetch this from the API
-        users.add(new User("USR-0001", "Admin", "User", "admin@example.com", "123-456-7890", "Administrator"));
-        users.add(new User("USR-0002", "John", "Doe", "john.doe@example.com", "098-765-4321", "Pet Owner"));
-        users.add(new User("USR-0003", "Jane", "Smith", "jane.smith@example.com", "555-123-4567", "Veterinarian"));
-        users.add(new User("USR-0004", "Robert", "Johnson", "robert.j@example.com", "444-222-3333", "Rescue Group"));
-        users.add(new User("USR-0005", "Emily", "Williams", "emily.w@example.com", "777-888-9999", "Pet Owner"));
+        // Fetch users from the backend API
+        fetchUsersFromBackend();
+    }
+    
+    private void fetchUsersFromBackend() {
+        // Run in a separate thread to avoid blocking the UI
+        new Thread(() -> {
+            try {
+                // Fetch users from the real backend API
+                JsonObject usersResponse = apiService.getAllUsers();
+                
+                if (usersResponse != null && usersResponse.has("users")) {
+                    JsonArray usersArray = usersResponse.getAsJsonArray("users");
+                    
+                    // Update UI on EDT
+                    SwingUtilities.invokeLater(() -> {
+                        // Clear existing users
+                        allUsers.clear();
+                        
+                        // Parse users from response
+                        for (int i = 0; i < usersArray.size(); i++) {
+                            JsonObject userJson = usersArray.get(i).getAsJsonObject();
+                            
+                            User user = new User(
+                                userJson.has("id") ? userJson.get("id").getAsString() : "",
+                                userJson.has("firstName") ? userJson.get("firstName").getAsString() : "",
+                                userJson.has("lastName") ? userJson.get("lastName").getAsString() : "",
+                                userJson.has("email") ? userJson.get("email").getAsString() : "",
+                                userJson.has("phone") ? userJson.get("phone").getAsString() : "",
+                                userJson.has("role") ? userJson.get("role").getAsString() : "pet_owner",
+                                userJson.has("pets") ? userJson.get("pets").toString() : "[]"
+                            );
+                            
+                            allUsers.add(user);
+                        }
+                        
+                        // Refresh the users panel
+                        refreshUsersPanel();
+                    });
+                }
+            } catch (Exception e) {
+                System.err.println("Error fetching users from backend: " + e.getMessage());
+                e.printStackTrace();
+                
+                // Fallback to mock data if API call fails
+                SwingUtilities.invokeLater(() -> {
+                    // Clear existing users
+                    allUsers.clear();
+                    
+                    // Create a mock admin user
+                    User adminUser = new User(
+                        "USR-000001",
+                        "Admin",
+                        "User",
+                        "admin@haven.com",
+                        "+1234567890",
+                        "admin",
+                        "[]"
+                    );
+                    
+                    allUsers.add(adminUser);
+                    
+                    // Refresh the users panel
+                    refreshUsersPanel();
+                });
+            }
+        }).start();
     }
 
     private void initUI() {
@@ -250,7 +422,7 @@ public class HavenDashboard extends JFrame {
 
         // Map page
         mapPanel = new MapPanel();
-        centerCardPanel.add(mapPanel, "MAP");
+        centerCardPanel.add(createMapPanel(), "MAP");
 
         // Analytics page (simple placeholder)
         centerCardPanel.add(createAnalyticsPanel(), "ANALYTICS");
@@ -263,19 +435,23 @@ public class HavenDashboard extends JFrame {
         // Start at Map
         centerCardLayout.show(centerCardPanel, "MAP");
         
+        // Start the clock update timer
+        startClockUpdate();
+        
         // Don't fetch initial data to avoid showing alerts on startup
     }
 
     private void startDataRefresh() {
-        dataRefreshTimer = new Timer();
-        dataRefreshTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                // Removed simulation of random alerts
-                // fetchNewAlerts() was creating fake alerts
-                // Real alerts are now received via WebSocket only
-            }
-        }, 5000, 10000); // Refresh every 10 seconds
+        // Remove periodic data refresh since we're using real-time WebSocket updates
+        // dataRefreshTimer = new Timer();
+        // dataRefreshTimer.scheduleAtFixedRate(new TimerTask() {
+        //     @Override
+        //     public void run() {
+        //         // Removed simulation of random alerts
+        //         // fetchNewAlerts() was creating fake alerts
+        //         // Real alerts are now received via WebSocket only
+        //     }
+        // }, 5000, 10000); // Refresh every 10 seconds
     }
 
     private void fetchNewAlerts() {
@@ -367,21 +543,83 @@ public class HavenDashboard extends JFrame {
         lbl.setForeground(Color.BLACK);
         p.add(lbl, BorderLayout.NORTH);
 
-        // Create a panel to hold the cards
+        // Create a panel to hold the cards with zero/empty values until actual data is available
         JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 12));
         cardsPanel.setOpaque(false);
-        cardsPanel.add(createStatCard("Total Reports", "1842"));
-        cardsPanel.add(createStatCard("Processing", "42"));
-        cardsPanel.add(createStatCard("Avg. Response", "7m 22s"));
+        cardsPanel.add(createStatCard("Total Reports", "0", "totalReportsCard"));
+        cardsPanel.add(createStatCard("Active Reports", "0", "activeReportsCard"));
+        cardsPanel.add(createStatCard("Avg. Response", "--", "avgResponseCard"));
         
-        p.add(cardsPanel, BorderLayout.NORTH);
+        p.add(cardsPanel, BorderLayout.CENTER);
         
-        // Add empty panel to take up remaining space
-        JPanel filler = new JPanel();
-        filler.setOpaque(false);
-        p.add(filler, BorderLayout.CENTER);
+        // Remove the refresh button and initial data fetch
         
         return p;
+    }
+    
+    private JPanel createMapPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        
+        // Add map panel directly
+        panel.add(mapPanel, BorderLayout.CENTER);
+        
+        return panel;
+    }
+    
+    // Store references to stat cards for updating
+    private Map<String, JPanel> statCardMap = new HashMap<>();
+    
+    private JPanel createStatCard(String title, String value, String cardId) {
+        RoundedPanel card = new RoundedPanel();
+        card.setPreferredSize(new Dimension(200, 80)); // Shortened height from 120 to 80
+        card.setLayout(new BorderLayout());
+        card.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12)); // Reduced vertical padding
+        card.setBackground(new Color(245, 245, 245)); // Light card background
+        
+        // Store reference to card for updating
+        statCardMap.put(cardId, card);
+        
+        // Create a panel to center the title
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        titlePanel.setOpaque(false);
+        JLabel t = new JLabel(title); 
+        t.setForeground(Color.DARK_GRAY);
+        titlePanel.add(t);
+        
+        // Create a panel to center the value
+        JPanel valuePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        valuePanel.setOpaque(false);
+        JLabel v = new JLabel(value); 
+        v.setFont(v.getFont().deriveFont(Font.BOLD, 22f)); 
+        v.setForeground(new Color(255, 59, 48)); // HAVEN Red
+        v.setName("valueLabel"); // Set name for updating
+        valuePanel.add(v);
+        
+        card.add(titlePanel, BorderLayout.NORTH);
+        card.add(valuePanel, BorderLayout.CENTER);
+        return card;
+    }
+    
+    private void updateStatCard(String cardId, String title, String newValue) {
+        JPanel card = statCardMap.get(cardId);
+        if (card != null) {
+            // Find the value label and update it
+            Component[] components = card.getComponents();
+            for (Component component : components) {
+                if (component instanceof JPanel) {
+                    JPanel panel = (JPanel) component;
+                    Component[] panelComponents = panel.getComponents();
+                    for (Component panelComponent : panelComponents) {
+                        if (panelComponent instanceof JLabel && "valueLabel".equals(panelComponent.getName())) {
+                            JLabel valueLabel = (JLabel) panelComponent;
+                            valueLabel.setText(newValue);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private JPanel createStatCard(String title, String value) {
@@ -418,16 +656,83 @@ public class HavenDashboard extends JFrame {
         panel.setLayout(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         
-        JLabel title = new JLabel("Registered Users");
+        JLabel title = new JLabel("Users");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 20f));
         title.setForeground(Color.BLACK);
         panel.add(title, BorderLayout.NORTH);
         
+        // Create tabs for different user views
+        JTabbedPane tabbedPane = new JTabbedPane();
+        
+        // All Users tab
+        JPanel allUsersPanel = createUsersTablePanel(allUsers, "All Registered Users");
+        tabbedPane.addTab("All Users", allUsersPanel);
+        
+        // Online Users tab
+        JPanel onlineUsersPanel = createUsersTablePanel(onlineUsers, "Currently Online Users");
+        tabbedPane.addTab("Online Users", onlineUsersPanel);
+        
+        panel.add(tabbedPane, BorderLayout.CENTER);
+        
+        return panel;
+    }
+
+    private void onAlertClicked(AlertPanel.AlertData data) {
+        // Center map on the alert location without adding a new marker
+        mapPanel.centerOn(data.lat, data.lng);
+        // Highlight existing marker if it exists
+        mapPanel.highlightMarker(data.lat, data.lng);
+    }
+
+    private void simulateAddAlert() {
+        // This method was creating fake alerts
+        // Commenting out to prevent random alerts from appearing
+        /*
+        double lat = 10.6765 + Math.random() * 0.02 - 0.01;
+        double lng = 122.9509 + Math.random() * 0.02 - 0.01;
+        String id = "ALRT-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        String title = "Pet Emergency " + markerCounter.incrementAndGet();
+        alertPanel.addAlert(new AlertPanel.AlertData(title, "Location sample", "Owner", id, lat, lng));
+        mapPanel.addMarker(lat, lng, title, false);
+        */
+    }
+    
+    // Simple User data class
+    private static class User {
+        public final String id;
+        public final String firstName;
+        public final String lastName;
+        public final String email;
+        public final String phone;
+        public final String role;
+        public final String pets; // Store pets as JSON string
+        
+        public User(String id, String firstName, String lastName, String email, String phone, String role, String pets) {
+            this.id = id;
+            this.firstName = firstName;
+            this.lastName = lastName;
+            this.email = email;
+            this.phone = phone;
+            this.role = role;
+            this.pets = pets != null ? pets : "[]";
+        }
+    }
+    
+    // Helper method to create user table panels
+    private JPanel createUsersTablePanel(List<User> users, String title) {
+        JPanel panel = new JPanel(new BorderLayout());
+        
+        // Title
+        JLabel titleLabel = new JLabel(title + " (" + users.size() + " users)");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.add(titleLabel, BorderLayout.NORTH);
+        
         // Create a table to display users
-        String[] columnNames = {"ID", "First Name", "Last Name", "Email", "Phone", "Role"};
+        String[] columnNames = {"ID", "First Name", "Last Name", "Email", "Phone", "Role", "Pets"};
         
         // Convert user data to table format
-        Object[][] data = new Object[users.size()][6];
+        Object[][] data = new Object[users.size()][7];
         for (int i = 0; i < users.size(); i++) {
             User user = users.get(i);
             data[i][0] = user.id;
@@ -436,6 +741,7 @@ public class HavenDashboard extends JFrame {
             data[i][3] = user.email;
             data[i][4] = user.phone;
             data[i][5] = user.role;
+            data[i][6] = formatPetsForDisplay(user.pets);
         }
         
         JTable table = new JTable(data, columnNames) {
@@ -474,48 +780,46 @@ public class HavenDashboard extends JFrame {
             BorderFactory.createEmptyBorder(5, 10, 5, 10));
         
         JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+        scrollPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         scrollPane.getViewport().setBackground(Color.WHITE);
         panel.add(scrollPane, BorderLayout.CENTER);
         
         return panel;
     }
-
-    private void onAlertClicked(AlertPanel.AlertData data) {
-        // center and highlight marker on map
-        mapPanel.centerOn(data.lat, data.lng);
-        mapPanel.addMarker(data.lat, data.lng, data.title, true);
-    }
-
-    private void simulateAddAlert() {
-        // This method was creating fake alerts
-        // Commenting out to prevent random alerts from appearing
-        /*
-        double lat = 10.6765 + Math.random() * 0.02 - 0.01;
-        double lng = 122.9509 + Math.random() * 0.02 - 0.01;
-        String id = "ALRT-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-        String title = "Pet Emergency " + markerCounter.incrementAndGet();
-        alertPanel.addAlert(new AlertPanel.AlertData(title, "Location sample", "Owner", id, lat, lng));
-        mapPanel.addMarker(lat, lng, title, false);
-        */
-    }
     
-    // Simple User data class
-    private static class User {
-        public final String id;
-        public final String firstName;
-        public final String lastName;
-        public final String email;
-        public final String phone;
-        public final String role;
-        
-        public User(String id, String firstName, String lastName, String email, String phone, String role) {
-            this.id = id;
-            this.firstName = firstName;
-            this.lastName = lastName;
-            this.email = email;
-            this.phone = phone;
-            this.role = role;
+    // Helper method to format pets for display in the table
+    private String formatPetsForDisplay(String petsJson) {
+        try {
+            if (petsJson == null || petsJson.equals("[]") || petsJson.isEmpty()) {
+                return "No pets";
+            }
+            
+            com.google.gson.JsonArray petsArray = com.google.gson.JsonParser.parseString(petsJson).getAsJsonArray();
+            if (petsArray.size() == 0) {
+                return "No pets";
+            }
+            
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < petsArray.size(); i++) {
+                if (i > 0) result.append(", ");
+                
+                com.google.gson.JsonObject pet = petsArray.get(i).getAsJsonObject();
+                String name = pet.has("name") ? pet.get("name").getAsString() : "Unknown";
+                String type = pet.has("type") ? pet.get("type").getAsString() : "Pet";
+                String breed = pet.has("breed") ? pet.get("breed").getAsString() : "";
+                
+                result.append(name);
+                if (!breed.isEmpty()) {
+                    result.append(" (").append(breed).append(" ").append(type).append(")");
+                } else {
+                    result.append(" (").append(type).append(")");
+                }
+            }
+            
+            return result.toString();
+        } catch (Exception e) {
+            System.err.println("Error parsing pets JSON for display: " + e.getMessage());
+            return "Error parsing pets";
         }
     }
     
@@ -529,5 +833,40 @@ public class HavenDashboard extends JFrame {
             webSocketClient.disconnect();
         }
         super.dispose();
+    }
+    
+    private void startClockUpdate() {
+        Timer clockTimer = new Timer();
+        clockTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                SwingUtilities.invokeLater(() -> {
+                    // Find the date/time label in the top bar and update it
+                    Component[] components = ((JPanel) getContentPane().getComponent(0)).getComponents();
+                    for (Component component : components) {
+                        if (component instanceof JPanel) {
+                            Component[] rightComponents = ((JPanel) component).getComponents();
+                            for (Component rightComponent : rightComponents) {
+                                if (rightComponent instanceof JLabel) {
+                                    JLabel label = (JLabel) rightComponent;
+                                    String text = label.getText();
+                                    if (text != null && text.contains("Region: Bacolod City")) {
+                                        String dateTime = java.time.LocalDateTime.now().toString().replace('T', ' ').substring(0, 19);
+                                        label.setText("Region: Bacolod City  |  " + dateTime);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }, 0, 1000); // Update every second
+    }
+    
+    private void refreshUsersPanel() {
+        // This is a placeholder method for refreshing the users panel
+        // In a real implementation, you would properly refresh the users panel
+        System.out.println("Users panel refreshed with " + allUsers.size() + " users");
     }
 }

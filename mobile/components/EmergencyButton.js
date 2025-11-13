@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
+import { scale, moderateScale } from '../utils/responsive';
 
 const EmergencyButton = ({ onPress }) => {
   return (
@@ -12,9 +13,9 @@ const EmergencyButton = ({ onPress }) => {
 
 const styles = StyleSheet.create({
   button: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: scale(200),
+    height: scale(200),
+    borderRadius: scale(100),
     backgroundColor: COLORS.accentRed,
     alignItems: 'center',
     justifyContent: 'center',
@@ -24,23 +25,23 @@ const styles = StyleSheet.create({
         shadowColor: COLORS.accentRed,
         shadowOffset: {
           width: 0,
-          height: 4,
+          height: moderateScale(4),
         },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowRadius: moderateScale(8),
       },
       android: {
-        elevation: 8,
+        elevation: moderateScale(8),
       },
       web: {
-        boxShadow: `0 4px 8px ${COLORS.accentRed}4D`,
+        boxShadow: `0 ${moderateScale(4)}px ${moderateScale(8)}px ${COLORS.accentRed}4D`,
       }
     }),
   },
   buttonText: {
     color: COLORS.primaryBackground,
-    fontSize: TYPOGRAPHY.title.fontSize,
-    fontWeight: 'bold',
+    fontSize: moderateScale(TYPOGRAPHY.title.fontSize),
+    fontWeight: '600',
     textAlign: 'center',
     textTransform: 'uppercase',
   },

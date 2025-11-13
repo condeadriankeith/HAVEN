@@ -38,6 +38,29 @@ if not exist "HAVEN\server.js" (
     exit /b 1
 )
 
+:: Get the computer's IP address automatically (IPv4 only)
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr "IPv4 Address"') do (
+    set FULL_IP=%%a
+    set FULL_IP=!FULL_IP:~1!
+    :: Check if this looks like a valid IPv4 address (contains dots)
+    echo !FULL_IP! | findstr "\." >nul
+    if not errorlevel 1 (
+        set LOCAL_IP=!FULL_IP!
+        goto :found_ip
+    )
+)
+:found_ip
+
+if "%LOCAL_IP%"=="" (
+    echo WARNING: Could not automatically detect IP address. Using localhost.
+    set LOCAL_IP=localhost
+)
+echo Detected server IP: %LOCAL_IP%
+
+:: Set environment variables for this session
+set REACT_NATIVE_BACKEND_IP=http://%LOCAL_IP%:3000
+set HAVEN_BACKEND_URL=http://%LOCAL_IP%:3000
+
 :: Check if a process is already running on port 3000 and kill it
 echo Checking for existing backend server on port 3000...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3000') do (
@@ -96,7 +119,7 @@ if not exist "HAVEN\database\responders.csv" (
 
 echo [1/4] Starting backend API server...
 cd HAVEN
-start "HAVEN Backend" cmd /k "npm run start"
+start "HAVEN Backend" cmd /k "set REACT_NATIVE_BACKEND_IP=http://%LOCAL_IP%:3000 && set HAVEN_BACKEND_URL=http://%LOCAL_IP%:3000 && npm run start"
 cd ..
 
 timeout /t 5 /nobreak >nul
@@ -104,7 +127,7 @@ timeout /t 5 /nobreak >nul
 echo [2/4] Starting desktop application...
 cd desktop
 :: Start the desktop app directly with Maven
-start "HAVEN Desktop" cmd /k "mvn exec:java"
+start "HAVEN Desktop" cmd /k "set HAVEN_BACKEND_URL=http://%LOCAL_IP%:3000 && mvn exec:java"
 cd ..
 
 timeout /t 5 /nobreak >nul
@@ -115,20 +138,24 @@ cd mobile
 echo Clearing Expo cache...
 rd /s /q ".expo" >nul 2>&1
 :: Start the mobile app
-start "HAVEN Mobile" cmd /k "npx expo start"
+start "HAVEN Mobile" cmd /k "set REACT_NATIVE_BACKEND_IP=http://%LOCAL_IP%:3000 && npx expo start"
 cd ..
+
+:: Generate QR code for mobile app access
+echo Generating QR code for mobile app access...
+node generate-qr.js
 
 echo ========================================
 echo All HAVEN components started successfully!
 echo ========================================
-echo Backend API:    http://localhost:3000
+echo Backend API:    http://%LOCAL_IP%:3000
 echo Mobile App:     http://localhost:19006 (Expo DevTools)
 echo Desktop App:    Started with Maven
 echo Database:       HAVEN/database/ (CSV files)
 echo ========================================
 echo To access the mobile app:
 echo   1. Install Expo Go on your phone
-echo   2. Scan the QR code in the Expo terminal
+echo   2. Scan the QR code displayed in the generate-qr.js terminal
 echo   3. Or use the Android/iOS simulator
 echo ========================================
 echo Press any key to exit this launcher...

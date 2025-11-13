@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
 
 const HistoryScreen = () => {
@@ -61,18 +61,28 @@ const HistoryScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Emergency Reports</Text>
       <Text style={styles.subtitle}>Your past emergency submissions</Text>
       
-      <FlatList
-        data={reports}
-        renderItem={renderReportItem}
-        keyExtractor={item => item.id}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-      />
-    </View>
+      <View style={styles.list}>
+        {reports.map((item) => (
+          <View key={item.id} style={styles.reportItem}>
+            <View style={styles.reportHeader}>
+              <Text style={styles.reportType}>{item.type}</Text>
+              <Text style={[styles.status, { color: getStatusColor(item.status) }]}>
+                {item.status}
+              </Text>
+            </View>
+            <Text style={styles.reportDescription}>{item.description}</Text>
+            <Text style={styles.timestamp}>{formatTimestamp(item.timestamp)}</Text>
+            <TouchableOpacity style={styles.detailsButton}>
+              <Text style={styles.detailsButtonText}>View Details</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 };
 
@@ -80,36 +90,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primaryBackground,
-    padding: SPACING.medium,
+    padding: SPACING.lg,
   },
   title: {
     fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.secondary.fontSize,
+    fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.large,
+    marginBottom: SPACING.xl,
+    textAlign: 'center',
   },
   list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: SPACING.large,
+    marginBottom: SPACING.xl,
   },
   reportItem: {
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 8,
-    padding: SPACING.medium,
-    marginBottom: SPACING.medium,
-    // Removed border styles as per UI guidelines - using spacing and background colors instead
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   reportHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
   },
   reportType: {
     fontSize: TYPOGRAPHY.body.fontSize,
@@ -123,18 +133,22 @@ const styles = StyleSheet.create({
   reportDescription: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
   },
   timestamp: {
     fontSize: TYPOGRAPHY.secondary.fontSize,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.medium,
+    marginBottom: SPACING.md,
   },
   detailsButton: {
     alignSelf: 'flex-start',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.accentRed,
+    borderRadius: 8,
   },
   detailsButtonText: {
-    color: COLORS.accentRed,
+    color: COLORS.primaryBackground,
     fontSize: TYPOGRAPHY.body.fontSize,
     fontWeight: 'bold',
   },

@@ -55,6 +55,22 @@
                 box-shadow: 0 0 0 0 rgba(204, 0, 0, 0); /* Darker red */
             }
         }
+        
+        /* Response button in popup */
+        .response-btn {
+            background-color: #ff3b30;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        
+        .response-btn:hover {
+            background-color: #ff1a1a;
+        }
     </style>
 </head>
 <body>
@@ -81,10 +97,17 @@
         }
         
         // Add marker function (called from Java)
-        function addMarker(lat, lng, title, highlight) {
+        function addMarker(lat, lng, title, highlight, emergencyId) {
             var icon = createPulseIcon(highlight);
-            var marker = L.marker([lat, lng], {icon: icon}).addTo(map)
-                .bindPopup(title);
+            var marker = L.marker([lat, lng], {icon: icon}).addTo(map);
+            
+            // Create popup content with response button
+            var popupContent = '<div>' + 
+                '<h3>' + title + '</h3>' +
+                '<button class="response-btn" onclick="respondToEmergency(\'' + emergencyId + '\')">Respond to Emergency</button>' +
+                '</div>';
+            
+            marker.bindPopup(popupContent);
             
             var id = 'marker_' + lat + '_' + lng;
             markers[id] = marker;
@@ -94,6 +117,16 @@
             }
             
             return id;
+        }
+        
+        // Respond to emergency function (called when response button is clicked)
+        function respondToEmergency(emergencyId) {
+            // Send message to Java application
+            if (typeof javaRespondToEmergency !== 'undefined') {
+                javaRespondToEmergency(emergencyId);
+            } else {
+                alert('Responding to emergency: ' + emergencyId);
+            }
         }
         
         // Center on location function (called from Java)
@@ -107,6 +140,14 @@
             if (markers[id]) {
                 markers[id].openPopup();
             }
+        }
+        
+        // Clear all markers function (called from Java)
+        function clearMarkers() {
+            for (var id in markers) {
+                map.removeLayer(markers[id]);
+            }
+            markers = {};
         }
     </script>
 </body>

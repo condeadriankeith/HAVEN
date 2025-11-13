@@ -10,7 +10,10 @@
     "test": "jest",
     "test-emergency": "node test-emergency-button.js",
     "test-default-login": "node test-default-login.js",
-    "test-emergency-fix": "node ../tests/test-emergency-fix.js"
+    "test-emergency-fix": "node ../tests/test-emergency-fix.js",
+    "test-network": "node test-network-config.js",
+    "debug-env": "node debug-env.js",
+    "debug-config": "node debug-config.js"
   },
   "dependencies": {
     "@expo/cli": "^54.0.16",
@@ -39,5 +42,8 @@
     "react-native-worklets": "0.5.1",
     "websocket": "^1.0.35"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "dotenv": "^17.2.3"
+  }
 }

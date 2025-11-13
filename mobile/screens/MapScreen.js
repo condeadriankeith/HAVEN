@@ -1,55 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, Dimensions, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS, BORDERS } from '../constants/styles';
 import { emergenciesAPI } from '../services/api';
 import * as Location from 'expo-location';
 import WebSocketService from '../services/websocket';
 import { FontAwesome } from '@expo/vector-icons';
-
-// Safe Dimensions access with fallback
-const getWindowDimensions = () => {
-  try {
-    const dims = Dimensions.get('window');
-    return {
-      width: dims?.width || 375,
-      height: dims?.height || 667,
-      aspectRatio: (dims?.width || 375) / (dims?.height || 667)
-    };
-  } catch (error) {
-    console.warn('Error getting window dimensions, using fallback values:', error);
-    return {
-      width: 375,
-      height: 667,
-      aspectRatio: 375 / 667
-    };
-  }
-};
+import { useResponsiveDimensions } from '../hooks/useResponsiveDimensions';
+import { scale, verticalScale, moderateScale } from '../utils/responsive';
 
 const MapScreen = () => {
-  const [dimensions, setDimensions] = useState(getWindowDimensions());
+  const { width, height, aspectRatio } = useResponsiveDimensions();
   const [emergencies, setEmergencies] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [mapView, setMapView] = useState(null);
+  const [mapError, setMapError] = useState(null);
+  const webViewRef = useRef(null);
 
-  // Update dimensions on screen rotation
-  useEffect(() => {
-    const onChange = () => {
-      setDimensions(getWindowDimensions());
-    };
-    
-    const subscription = Dimensions.addEventListener('change', onChange);
-    return () => {
-      if (subscription?.remove) {
-        subscription.remove();
-      } else {
-        // Fallback for older React Native versions
-        Dimensions.removeEventListener('change', onChange);
-      }
-    };
-  }, []);
+
 
   useEffect(() => {
     loadActiveEmergencies();
@@ -72,8 +41,7 @@ const MapScreen = () => {
         }
       });
       
-      // Refresh the map to show updated markers
-      refreshMap();
+      // Remove refreshMap call since we don't need refresh buttons
     };
 
     const handleNewEmergencyAlert = (emergency) => {
@@ -92,8 +60,7 @@ const MapScreen = () => {
         }
       });
       
-      // Refresh the map to show new markers
-      refreshMap();
+      // Remove refreshMap call since we don't need refresh buttons
     };
 
     WebSocketService.on('emergency_update', handleEmergencyUpdate);
@@ -105,13 +72,6 @@ const MapScreen = () => {
       WebSocketService.off('new-emergency-alert', handleNewEmergencyAlert);
     };
   }, []);
-
-  const refreshMap = () => {
-    // Force the WebView to reload with updated data
-    if (mapView) {
-      mapView.reload();
-    }
-  };
 
   const getCurrentLocation = async () => {
     try {
@@ -144,16 +104,15 @@ const MapScreen = () => {
       const response = await emergenciesAPI.getActiveEmergencies();
       setEmergencies(response.data.emergencies || []);
       setLoading(false);
-      setRefreshing(false);
+      setMapError(null);
     } catch (error) {
       console.error('Error loading emergencies:', error);
-      Alert.alert('Error', 'Failed to load emergency data');
+      setMapError('Failed to load emergency data. Please check your connection.');
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  // Generate HTML for the map with Leaflet.js
+  // Generate HTML for the map with Leaflet.js - simplified version similar to desktop
   const generateMapHTML = () => {
     const centerLat = userLocation ? userLocation.latitude : 10.6765;
     const centerLng = userLocation ? userLocation.longitude : 122.9509;
@@ -168,14 +127,42 @@ const MapScreen = () => {
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
+          html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #000000;
+          }
           #map { 
             height: 100vh; 
             width: 100%;
           }
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          .pulse-circle {
+            width: 20px;
+            height: 20px;
+            background-color: #ff3b30;
+            border-radius: 50%;
+            position: relative;
+            animation: pulse 1.5s infinite ease-out;
+            margin: 10px;
+          }
+          @keyframes pulse {
+            0% {
+              transform: scale(0.8);
+              opacity: 0.8;
+              box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7);
+            }
+            70% {
+              transform: scale(1.2);
+              opacity: 0.5;
+              box-shadow: 0 0 0 15px rgba(255, 59, 48, 0);
+            }
+            100% {
+              transform: scale(0.8);
+              opacity: 0.8;
+              box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+            }
           }
           .user-marker {
             background-color: #2196F3;
@@ -186,43 +173,8 @@ const MapScreen = () => {
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
           }
           .emergency-marker {
-            background-color: #ff4d4d;
-            width: 34px;
-            height: 34px;
-            border-radius: 17px;
-            border: 3px solid white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .emergency-icon {
-            color: white;
-            font-size: 16px;
-          }
-          .emergency-pulse {
-            position: absolute;
-            width: 80px;
-            height: 80px;
-            border-radius: 40px;
-            background-color: rgba(255,77,77,0.12);
-            z-index: -1;
-            animation: pulse 2s infinite ease-out;
-          }
-          @keyframes pulse {
-            0% {
-                transform: scale(0.9);
-                opacity: 0.9;
-            }
-            70% {
-                transform: scale(1.1);
-                opacity: 0.7;
-            }
-            100% {
-                transform: scale(0.9);
-                opacity: 0.9;
-            }
+            width: 40px;
+            height: 40px;
           }
           .legend {
             background: white;
@@ -258,7 +210,7 @@ const MapScreen = () => {
             background-color: #2196F3;
           }
           .emergency-color {
-            background-color: #ff4d4d;
+            background-color: #ff3b30;
           }
           .emergency-popup {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -281,6 +233,12 @@ const MapScreen = () => {
             color: #5A5A5A;
             font-size: 14px;
           }
+          .emergency-reporter {
+            font-size: 12px;
+            color: #4A4A4A;
+            font-style: italic;
+            margin: 4px 0;
+          }
           .emergency-address {
             font-size: 12px;
             color: #8A8A8A;
@@ -300,7 +258,7 @@ const MapScreen = () => {
           // Initialize the map
           const map = L.map('map').setView([${centerLat}, ${centerLng}], 15);
           
-          // Add OpenStreetMap tiles with enhanced styling
+          // Add OpenStreetMap tiles
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
@@ -343,22 +301,67 @@ const MapScreen = () => {
             }
             
             // Create popup content with consistent formatting
-            const popupContent = \`
-              <div class="emergency-popup">
-                <div class="emergency-type">\${emergency.emergencyType || emergency.type || 'Emergency'}</div>
-                <div class="emergency-description">\${emergency.description || 'No description provided'}</div>
-                <div class="emergency-id">ID: \${emergency.emergencyId || 'N/A'}</div>
-                \${emergency.location && emergency.location.address ? \`<div class="emergency-address">\${emergency.location.address}</div>\` : ''}
-                \${timestamp ? \`<div class="emergency-timestamp">\${timestamp}</div>\` : ''}
-              </div>
-            \`;
+            // Format timestamp for display
+            let displayTimestamp = '';
+            if (emergency.timestamp) {
+              const now = new Date();
+              const date = new Date(emergency.timestamp);
+              const diffInSeconds = Math.floor((now - date) / 1000);
+                          
+              if (diffInSeconds < 60) {
+                displayTimestamp = 'Just now - ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } else if (diffInSeconds < 3600) {
+                const minutes = Math.floor(diffInSeconds / 60);
+                displayTimestamp = minutes + ' minute' + (minutes > 1 ? 's' : '') + ' ago - ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } else if (diffInSeconds < 86400) {
+                const hours = Math.floor(diffInSeconds / 3600);
+                displayTimestamp = hours + ' hour' + (hours > 1 ? 's' : '') + ' ago - ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } else {
+                const days = Math.floor(diffInSeconds / 86400);
+                displayTimestamp = days + ' day' + (days > 1 ? 's' : '') + ' ago - ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              }
+            }
+                        
+            // Get reporter name
+            const reporterName = emergency.userName || (emergency.contactInfo && emergency.contactInfo.name) || 'User';
+                        
+            // Escape HTML special characters
+            const escapeHtml = (text) => {
+              return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            };
+                        
+            const emergencyType = escapeHtml(emergency.emergencyType || emergency.type || 'Emergency');
+            const description = escapeHtml(emergency.description || 'No description provided');
+            const emergencyId = escapeHtml(emergency.emergencyId || 'N/A');
+            const address = emergency.location && emergency.location.address ? escapeHtml(emergency.location.address) : '';
+            const reporter = escapeHtml(reporterName);
+                        
+            // Build popup content using string concatenation to avoid template literal issues
+            let popupContent = '<div class="emergency-popup">' +
+              '<div class="emergency-type">' + emergencyType + '</div>' +
+              '<div class="emergency-description">' + description + '</div>' +
+              '<div class="emergency-id">ID: ' + emergencyId + '</div>' +
+              '<div class="emergency-reporter">Reported by ' + reporter + '</div>';
+                          
+            if (address) {
+              popupContent += '<div class="emergency-address">' + address + '</div>';
+            }
+                        
+            if (displayTimestamp) {
+              popupContent += '<div class="emergency-timestamp">' + displayTimestamp + '</div>';
+            }
+                        
+            popupContent += '</div>';
+                        
+            // Log for debugging
+            console.log('Popup content:', popupContent);
             
             const marker = L.marker([lat, lng], {
               icon: L.divIcon({
                 className: 'emergency-marker',
-                iconSize: [34, 34],
-                iconAnchor: [17, 17],
-                html: '<div class="emergency-pulse"></div><div class="emergency-icon">⚠</div>'
+                iconSize: [40, 40],
+                iconAnchor: [20, 40],
+                html: '<div class="pulse-circle"></div>'
               })
             }).addTo(map)
               .bindPopup(popupContent);
@@ -388,6 +391,17 @@ const MapScreen = () => {
     `;
   };
 
+  const onWebViewError = (syntheticEvent) => {
+    const { nativeEvent } = syntheticEvent;
+    console.warn('WebView error: ', nativeEvent);
+    setMapError('Failed to load map. Please check your internet connection.');
+    setLoading(false);
+  };
+
+  const onWebViewLoad = () => {
+    setLoading(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -396,29 +410,44 @@ const MapScreen = () => {
       </View>
       
       <View style={styles.mapContainer}>
-        {loading ? (
+        {loading && (
           <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading map...</Text>
+          </View>
+        )}
+        
+        {mapError ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{mapError}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => {
+              setMapError(null);
+              setLoading(true);
+              loadActiveEmergencies();
+            }}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
             <WebView
-              ref={ref => setMapView(ref)}
+              ref={webViewRef}
               originWhitelist={['*']}
               source={{ html: generateMapHTML() }}
-              style={styles.map}
+              style={[styles.map, loading && { display: 'none' }]}
               javaScriptEnabled={true}
               domStorageEnabled={true}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={() => {
-                  setRefreshing(true);
-                  loadActiveEmergencies();
-                }} />
-              }
+              onError={onWebViewError}
+              onLoad={onWebViewLoad}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading map...</Text>
+                </View>
+              )}
             />
-            <TouchableOpacity style={styles.refreshButton} onPress={refreshMap}>
-              <FontAwesome name="refresh" size={20} color={COLORS.primaryBackground} />
-            </TouchableOpacity>
+            {/* Remove the refresh button since the system is supposed to be constantly refreshing for real-time updates */}
             
             {/* Center on user FAB */}
             <TouchableOpacity style={styles.centerFab} onPress={getCurrentLocation}>
@@ -450,23 +479,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryBackground,
   },
   header: {
-    padding: SPACING.medium,
+    padding: moderateScale(SPACING.lg),
     backgroundColor: COLORS.secondaryBackground,
-    marginBottom: SPACING.small,
-    borderBottomWidth: BORDERS.width,
-    borderBottomColor: BORDERS.color,
+    marginBottom: moderateScale(SPACING.md),
+    alignItems: 'center',
   },
   title: {
-    fontSize: TYPOGRAPHY.title.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.title.fontSize),
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.secondary.fontSize,
-    fontWeight: TYPOGRAPHY.secondary.fontWeight,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
-    marginTop: 4,
+    marginTop: moderateScale(SPACING.sm),
     textAlign: 'center',
   },
   mapContainer: {
@@ -479,33 +506,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.cardBackground,
   },
-  loadingText: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardBackground,
+    padding: moderateScale(SPACING.lg),
+  },
+  errorText: {
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: moderateScale(SPACING.lg),
+  },
+  retryButton: {
+    backgroundColor: COLORS.accentRed,
+    paddingHorizontal: moderateScale(SPACING.xl),
+    paddingVertical: moderateScale(SPACING.md),
+    borderRadius: moderateScale(8),
+  },
+  retryButtonText: {
+    color: COLORS.primaryBackground,
+    fontWeight: '600',
+    fontSize: moderateScale(TYPOGRAPHY.button.fontSize),
+  },
+  loadingText: {
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
+    color: COLORS.textSecondary,
+    marginTop: moderateScale(SPACING.md),
   },
   map: {
     flex: 1,
   },
-  refreshButton: {
-    position: 'absolute',
-    right: SPACING.large,
-    top: SPACING.large,
-    backgroundColor: COLORS.primary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...SHADOWS.medium,
-  },
   topCard: {
     position: 'absolute',
-    top: 42,
+    top: verticalScale(42),
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    padding: moderateScale(12),
+    paddingHorizontal: moderateScale(16),
+    borderRadius: moderateScale(12),
     elevation: 4,
     shadowColor: '#000',
     shadowOpacity: 0.08,
@@ -514,22 +554,22 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   topTitle: { 
-    fontSize: 16, 
+    fontSize: moderateScale(16), 
     fontWeight: '700', 
     color: '#222' 
   },
   topSubtitle: { 
-    fontSize: 12, 
+    fontSize: moderateScale(12), 
     color: '#666', 
-    marginTop: 2 
+    marginTop: moderateScale(2) 
   },
   centerFab: {
     position: 'absolute',
-    right: 16,
-    bottom: 120,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    right: moderateScale(16),
+    bottom: verticalScale(120),
+    width: scale(52),
+    height: scale(52),
+    borderRadius: scale(26),
     backgroundColor: '#2a81f7',
     alignItems: 'center',
     justifyContent: 'center',
@@ -538,11 +578,11 @@ const styles = StyleSheet.create({
   },
   listFab: {
     position: 'absolute',
-    left: 16,
-    bottom: 120,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    left: moderateScale(16),
+    bottom: verticalScale(120),
+    width: scale(52),
+    height: scale(52),
+    borderRadius: scale(26),
     backgroundColor: '#444',
     alignItems: 'center',
     justifyContent: 'center',

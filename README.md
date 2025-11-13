@@ -292,3 +292,37 @@ All components communicate through the central backend API, with real-time updat
 - Passwords are hashed using bcrypt
 - WebSocket connections require authentication
 - CORS policies restrict unauthorized access
+
+## Automatic Environment Configuration
+
+The HAVEN system now includes automatic environment variable configuration to make it easier to deploy across different devices and networks. When you run the [init.bat](file:///c%3A/Users/conde/Downloads/HAVEN/init.bat) or [run.bat](file:///c%3A/Users/conde/Downloads/HAVEN/run.bat) scripts, the system will automatically:
+
+1. Detect the server's IP address on the local network
+2. Create or update environment configuration files for all components:
+   - Mobile app: Creates/updates `mobile/.env` with `REACT_NATIVE_BACKEND_IP`
+   - Desktop app: Creates/updates `desktop/.env` with `HAVEN_BACKEND_URL`
+3. Configure the backend server to bind to all network interfaces
+4. Generate a QR code for easy mobile app access
+
+### How It Works
+
+1. **IP Detection**: The system automatically detects the server's IP address by checking Wi-Fi and Ethernet interfaces
+2. **Environment Files**: Environment variables are automatically written to `.env` files in each component directory
+3. **Network Binding**: The backend server binds to `0.0.0.0` to accept connections from any network interface
+4. **QR Code Generation**: A QR code is generated for easy mobile app access via Expo Go
+
+### Manual Configuration (if needed)
+
+If you need to manually configure the environment variables, you can create `.env` files in each component directory:
+
+**Mobile App** (`mobile/.env`):
+```
+REACT_NATIVE_BACKEND_IP=http://YOUR_SERVER_IP:3000
+```
+
+**Desktop App** (`desktop/.env`):
+```
+HAVEN_BACKEND_URL=http://YOUR_SERVER_IP:3000
+```
+
+Replace `YOUR_SERVER_IP` with the actual IP address of the computer running the backend server.

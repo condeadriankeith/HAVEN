@@ -1,17 +1,22 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import websocket from './websocket';
+import CONFIG from '../config';
 
 // Base API configuration
 // For development, use localhost for web, and computer's IP for mobile devices
 // For production, this should be configured via environment variables
 const getBaseUrl = () => {
+  // Try to get from config first
+  if (CONFIG.API_BASE_URL) {
+    return CONFIG.API_BASE_URL;
+  }
+  
   if (__DEV__) {
     // Check if running on web or mobile
     if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
-      // For mobile devices, use your computer's IP address
-      // Using the IP address we found: 192.168.254.102
-      return 'http://192.168.254.102:3000';
+      // For mobile devices, use localhost as fallback
+      return 'http://localhost:3000';
     } else {
       // For web browser, use localhost
       return 'http://localhost:3000';
@@ -27,7 +32,7 @@ const API_BASE_URL = getBaseUrl();
 // Create axios instance with default config
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // Increased timeout to 15 seconds
+  timeout: 10000, // Reduced timeout to 10 seconds for better responsiveness
   headers: {
     'Content-Type': 'application/json',
   },
@@ -81,20 +86,49 @@ apiClient.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  register: (userData) => apiClient.post('/api/v1/auth/register', userData),
-  login: async (credentials) => {
-    const response = await apiClient.post('/api/v1/auth/login', credentials);
-    // Store user data in AsyncStorage
-    if (response.data.token) {
-      await AsyncStorage.setItem('authToken', response.data.token);
-      await AsyncStorage.setItem('userId', response.data.userId);
-      await AsyncStorage.setItem('userName', `${response.data.firstName} ${response.data.lastName}`);
-      await AsyncStorage.setItem('userPhone', response.data.phone || '');
-      await AsyncStorage.setItem('userEmail', response.data.email);
-      // Connect WebSocket after successful login
-      websocket.connect(response.data.token);
+  register: async (userData) => {
+    try {
+      const response = await apiClient.post('/api/v1/auth/register', userData);
+      return response;
+    } catch (error) {
+      // Provide more specific error messages
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Connection timeout - server is not responding. Please check your network connection.');
+      } else if (error.code === 'ENOTFOUND') {
+        throw new Error('Server not found. Please check if the server is running and the IP address is correct.');
+      } else if (error.code === 'ECONNREFUSED') {
+        throw new Error('Connection refused. Please check if the server is running.');
+      } else {
+        throw error;
+      }
     }
-    return response;
+  },
+  login: async (credentials) => {
+    try {
+      const response = await apiClient.post('/api/v1/auth/login', credentials);
+      // Store user data in AsyncStorage
+      if (response.data.token) {
+        await AsyncStorage.setItem('authToken', response.data.token);
+        await AsyncStorage.setItem('userId', response.data.userId);
+        await AsyncStorage.setItem('userName', `${response.data.firstName} ${response.data.lastName}`);
+        await AsyncStorage.setItem('userPhone', response.data.phone || '');
+        await AsyncStorage.setItem('userEmail', response.data.email);
+        // Connect WebSocket after successful login
+        websocket.connect(response.data.token);
+      }
+      return response;
+    } catch (error) {
+      // Provide more specific error messages
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Connection timeout - server is not responding. Please check your network connection.');
+      } else if (error.code === 'ENOTFOUND') {
+        throw new Error('Server not found. Please check if the server is running and the IP address is correct.');
+      } else if (error.code === 'ECONNREFUSED') {
+        throw new Error('Connection refused. Please check if the server is running.');
+      } else {
+        throw error;
+      }
+    }
   },
   getProfile: () => apiClient.get('/api/v1/users/profile'),
 };
@@ -138,6 +172,29 @@ export const clearToken = async () => {
     websocket.disconnect();
   } catch (error) {
     console.error('Error clearing token:', error);
+  }
+};
+
+// New function to clear emergency report data from local storage
+export const clearEmergencyData = async () => {
+  try {
+    // Get all keys from AsyncStorage
+    const allKeys = await AsyncStorage.getAllKeys();
+    
+    // Filter keys related to emergency reports
+    const emergencyKeys = allKeys.filter(key => 
+      key.startsWith('emergency_') || 
+      key.includes('report') ||
+      key.includes('alert')
+    );
+    
+    // Remove emergency-related keys
+    if (emergencyKeys.length > 0) {
+      await AsyncStorage.multiRemove(emergencyKeys);
+      console.log('Cleared emergency data from local storage');
+    }
+  } catch (error) {
+    console.error('Error clearing emergency data:', error);
   }
 };
 

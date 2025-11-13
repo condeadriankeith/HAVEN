@@ -73,38 +73,35 @@ function initializeWebSocketServer(server) {
             emergencyData.emergencyType = 'Pet Health Emergency';
           }
           
-          // Preserve the nested location object structure for consistency with mobile app
-          // Only flatten if the location data is at the top level (which shouldn't be the case from mobile app)
-          if (emergencyData.latitude !== undefined && emergencyData.longitude !== undefined && !emergencyData.location) {
-            // Create nested location object if flat structure is detected
-            emergencyData.location = {
-              latitude: emergencyData.latitude,
-              longitude: emergencyData.longitude
-            };
-            
-            // Copy other location properties if they exist
-            if (emergencyData.accuracy !== undefined) emergencyData.location.accuracy = emergencyData.accuracy;
-            if (emergencyData.altitude !== undefined) emergencyData.location.altitude = emergencyData.altitude;
-            if (emergencyData.heading !== undefined) emergencyData.location.heading = emergencyData.heading;
-            if (emergencyData.speed !== undefined) emergencyData.location.speed = emergencyData.speed;
-            if (emergencyData.address !== undefined) emergencyData.location.address = emergencyData.address;
-            
-            // Remove flat location properties
-            delete emergencyData.latitude;
-            delete emergencyData.longitude;
-            delete emergencyData.accuracy;
-            delete emergencyData.altitude;
-            delete emergencyData.heading;
-            delete emergencyData.speed;
-            delete emergencyData.address;
-          }
-          
-          // If we still don't have location data, ensure we have minimum required data
+          // Ensure location data is properly structured
           if (!emergencyData.location) {
-            emergencyData.location = {
-              latitude: 10.6765,
-              longitude: 122.9509
-            };
+            // Create nested location object if flat structure is detected
+            if (emergencyData.latitude !== undefined || emergencyData.longitude !== undefined) {
+              emergencyData.location = {
+                latitude: emergencyData.latitude !== undefined ? emergencyData.latitude : 10.6765,
+                longitude: emergencyData.longitude !== undefined ? emergencyData.longitude : 122.9509,
+                accuracy: emergencyData.accuracy !== undefined ? emergencyData.accuracy : 0,
+                altitude: emergencyData.altitude !== undefined ? emergencyData.altitude : 0,
+                heading: emergencyData.heading !== undefined ? emergencyData.heading : 0,
+                speed: emergencyData.speed !== undefined ? emergencyData.speed : 0,
+                address: emergencyData.address !== undefined ? emergencyData.address : ''
+              };
+              
+              // Remove flat location properties
+              delete emergencyData.latitude;
+              delete emergencyData.longitude;
+              delete emergencyData.accuracy;
+              delete emergencyData.altitude;
+              delete emergencyData.heading;
+              delete emergencyData.speed;
+              delete emergencyData.address;
+            } else {
+              // Default location if none provided
+              emergencyData.location = {
+                latitude: 10.6765,
+                longitude: 122.9509
+              };
+            }
           }
           
           // Validate coordinates are within reasonable bounds
@@ -181,19 +178,48 @@ function broadcastEmergencyUpdate(emergency) {
   // Send to all connected clients (both authenticated and unauthenticated)
   allClients.forEach((client, clientId) => {
     // Check if client is subscribed to emergency alerts
-    if (client.readyState === WebSocket.OPEN && client.subscribedToAlerts) {
+    // For prototype mode, send to all clients regardless of subscription status
+    if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   });
   
   authenticatedClients.forEach((client, userId) => {
     // Check if client is subscribed to emergency alerts
-    if (client.readyState === WebSocket.OPEN && client.subscribedToAlerts) {
+    // For prototype mode, send to all clients regardless of subscription status
+    if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   });
   
   console.log('Emergency update broadcasted to all clients');
+}
+
+// Add a new function to broadcast emergency status updates
+/**
+ * Broadcast emergency status update to all connected clients
+ * @param {Object} emergency - Emergency data with updated status
+ */
+function broadcastEmergencyStatusUpdate(emergency) {
+  const message = JSON.stringify({
+    type: 'emergency-status-changed',
+    emergency
+  });
+  
+  // Send to all connected clients (both authenticated and unauthenticated)
+  allClients.forEach((client, clientId) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+  
+  authenticatedClients.forEach((client, userId) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+  
+  console.log('Emergency status update broadcasted to all clients');
 }
 
 /**
@@ -208,8 +234,10 @@ function notifyUser(userId, data) {
   }
 }
 
+// Export the new function
 module.exports = {
   initializeWebSocketServer,
   broadcastEmergencyUpdate,
+  broadcastEmergencyStatusUpdate, // Add the new function to exports
   notifyUser
 };

@@ -1,2 +1,3 @@
 id,email,phone,firstName,lastName,address,role,password
 USR-0001,admin@example.com,123-456-7890,Admin,User,Default Admin Address,admin,$2a$10$G54sq85aYb484xKVawJfSOo5Lbop8/NywuR4ODvM9YKuo.HCaKQ8y
+USR-0002,s2100092@usls.edu.ph,(0939) 944 9394,Adrian,Conde,,pet_owner,$2a$10$nZuA1bDQMZGj6yl9V83af.P0yVWYlXA6SbGLCSt.LTqnPKhp/RHOS

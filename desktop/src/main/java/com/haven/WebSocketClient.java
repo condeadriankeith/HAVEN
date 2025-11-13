@@ -23,6 +23,7 @@ public class WebSocketClient {
     private ConnectionListener connectionListener;
     private List<JsonObject> activeEmergencies = new ArrayList<>();
     private boolean isConnected = false;
+    private boolean subscribedToAlerts = false;
     private String authToken;
 
     public WebSocketClient() {
@@ -56,10 +57,9 @@ public class WebSocketClient {
                 // Authenticate after connection if token is provided
                 if (token != null && !token.isEmpty()) {
                     authenticate(token);
-                } else {
-                    // For prototype, subscribe to emergency alerts without authentication
-                    subscribeToEmergencyAlerts();
                 }
+                // For prototype, subscription is now handled in onOpen method
+                // This ensures the session is fully established before subscribing
                 
                 // If we get here, connection was successful
                 return;
@@ -84,6 +84,13 @@ public class WebSocketClient {
         System.out.println("WebSocket connection opened");
         this.userSession = userSession;
         this.isConnected = true;
+        
+        // Subscribe to emergency alerts immediately after connection
+        if (authToken == null || authToken.isEmpty()) {
+            // For prototype, subscribe to emergency alerts without authentication
+            subscribeToEmergencyAlerts();
+        }
+        
         latch.countDown();
         
         if (connectionListener != null) {
@@ -145,6 +152,8 @@ public class WebSocketClient {
                     break;
                 case "subscription-ack":
                     System.out.println("Subscribed to emergency alerts successfully");
+                    // Set a flag to indicate that we're subscribed
+                    this.subscribedToAlerts = true;
                     break;
                 case "status-update-ack":
                     System.out.println("Emergency status update acknowledged");
@@ -172,7 +181,23 @@ public class WebSocketClient {
 
     private void handleEmergencyUpdate(JsonObject data) {
         if (emergencyUpdateListener != null) {
-            JsonObject emergency = data.get("emergency").getAsJsonObject();
+            // The emergency data might be in different locations depending on how it's sent
+            JsonObject emergency = null;
+            
+            // Check if emergency data is in the "emergency" field
+            if (data.has("emergency")) {
+                emergency = data.getAsJsonObject("emergency");
+            } 
+            // Check if emergency data is directly in the data object
+            else if (data.has("emergencyId")) {
+                emergency = data;
+            }
+            // If we still don't have emergency data, log and return
+            else {
+                System.err.println("No emergency data found in emergency_update message: " + data.toString());
+                return;
+            }
+            
             emergencyUpdateListener.onEmergencyUpdate(emergency);
         }
     }
@@ -184,11 +209,11 @@ public class WebSocketClient {
             // The emergency data might be in different locations depending on how it's sent
             JsonObject emergency = null;
             
-            // Check if emergency data is in the "emergency" field
+            // Check if emergency data is in the "emergency" field (from mobile app)
             if (data.has("emergency")) {
                 emergency = data.getAsJsonObject("emergency");
             } 
-            // Check if emergency data is directly in the data object
+            // Check if emergency data is directly in the data object (from REST API or direct WebSocket)
             else if (data.has("emergencyId")) {
                 emergency = data;
             }

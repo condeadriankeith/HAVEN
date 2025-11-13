@@ -7,8 +7,11 @@ import { emergenciesAPI, websocketService } from '../services/api';
 import { reverseGeocode, getCurrentLocation } from '../services/location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { log, warn, error } from '../services/logging';
+import { useResponsiveDimensions } from '../hooks/useResponsiveDimensions';
+import { scale, verticalScale, moderateScale } from '../utils/responsive';
 
 const HomeScreen = ({ navigation }) => {
+  const { width, height, aspectRatio } = useResponsiveDimensions();
   const [activeEmergencies, setActiveEmergencies] = useState([]);
   const [isReporting, setIsReporting] = useState(false);
   const [hasLocationPermission, setHasLocationPermission] = useState(null);
@@ -318,107 +321,107 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryBackground,
   },
   header: {
-    padding: SPACING.large,
+    padding: moderateScale(SPACING.xl),
     backgroundColor: COLORS.secondaryBackground,
     alignItems: 'center',
     borderBottomWidth: BORDERS.width,
     borderBottomColor: BORDERS.color,
   },
   title: {
-    fontSize: TYPOGRAPHY.title.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.title.fontSize),
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.subtitle.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
-    marginTop: SPACING.small,
+    marginTop: moderateScale(SPACING.md),
     textAlign: 'center',
   },
   content: {
     flex: 1,
-    padding: SPACING.medium,
+    padding: moderateScale(SPACING.lg),
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: SPACING.medium,
-    padding: SPACING.medium,
+    marginVertical: moderateScale(SPACING.lg),
+    padding: moderateScale(SPACING.lg),
     backgroundColor: COLORS.cardBackground,
-    borderRadius: BORDERS.radius,
+    borderRadius: moderateScale(BORDERS.radius),
     ...SHADOWS.small,
   },
   loadingText: {
-    marginLeft: SPACING.small,
-    fontSize: TYPOGRAPHY.body.fontSize,
+    marginLeft: moderateScale(SPACING.md),
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textPrimary,
   },
   infoSection: {
-    marginTop: SPACING.large,
-    padding: SPACING.medium,
+    marginTop: moderateScale(SPACING.xl),
+    padding: moderateScale(SPACING.lg),
     backgroundColor: COLORS.cardBackground,
-    borderRadius: BORDERS.radius,
+    borderRadius: moderateScale(BORDERS.radius),
     ...SHADOWS.small,
   },
   infoTitle: {
-    fontSize: TYPOGRAPHY.subtitle.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.subtitle.fontSize),
     fontWeight: TYPOGRAPHY.subtitle.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.medium,
+    marginBottom: moderateScale(SPACING.lg),
     textAlign: 'center',
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: SPACING.small,
+    marginBottom: moderateScale(SPACING.md),
   },
   infoNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
+    width: scale(24),
+    height: scale(24),
+    borderRadius: scale(12),
+    backgroundColor: COLORS.accentRed,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.small,
-    marginTop: 2,
+    marginRight: moderateScale(SPACING.md),
+    marginTop: scale(2),
   },
   infoNumberText: {
     color: COLORS.primaryBackground,
-    fontSize: TYPOGRAPHY.secondary.fontSize,
-    fontWeight: 'bold',
+    fontSize: moderateScale(TYPOGRAPHY.secondary.fontSize),
+    fontWeight: '600',
   },
   infoText: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
     flex: 1,
   },
   featuresSection: {
-    marginTop: SPACING.large,
-    padding: SPACING.medium,
+    marginTop: moderateScale(SPACING.xl),
+    padding: moderateScale(SPACING.lg),
     backgroundColor: COLORS.cardBackground,
-    borderRadius: BORDERS.radius,
+    borderRadius: moderateScale(BORDERS.radius),
     ...SHADOWS.small,
   },
   featuresTitle: {
-    fontSize: TYPOGRAPHY.subtitle.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.subtitle.fontSize),
     fontWeight: TYPOGRAPHY.subtitle.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.medium,
+    marginBottom: moderateScale(SPACING.lg),
     textAlign: 'center',
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.small,
+    marginBottom: moderateScale(SPACING.md),
   },
   featureIcon: {
-    fontSize: 20,
-    marginRight: SPACING.small,
+    fontSize: moderateScale(20),
+    marginRight: moderateScale(SPACING.md),
   },
   featureText: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
     color: COLORS.textSecondary,
   },
 });

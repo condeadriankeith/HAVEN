@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Switch, Alert, ScrollView } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
 
 const NotificationsScreen = () => {
@@ -32,29 +32,27 @@ const NotificationsScreen = () => {
     }
   ];
 
-  const sampleNotifications = [
-    {
-      id: '1',
-      title: 'Responder Dispatched',
-      message: 'A responder has been dispatched to your location for the injured dog report.',
-      timestamp: '2025-10-28T14:35:00Z',
-      read: false
-    },
-    {
-      id: '2',
-      title: 'Case Resolved',
-      message: 'Your emergency report from Oct 25 has been marked as resolved.',
-      timestamp: '2025-10-26T10:15:00Z',
-      read: true
-    },
-    {
-      id: '3',
-      title: 'Safety Reminder',
-      message: 'Remember to keep your pet\'s ID tags updated for emergencies.',
-      timestamp: '2025-10-27T09:00:00Z',
-      read: true
+  const [notifications, setNotifications] = useState([]);
+    
+  // Format timestamp to show "Just now" or elapsed time
+  const formatNotificationTimestamp = (timestamp) => {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - date) / 1000);
+      
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `${days} day${days > 1 ? 's' : ''} ago`;
     }
-  ];
+  };
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
@@ -74,7 +72,7 @@ const NotificationsScreen = () => {
     <View style={[styles.notificationItem, !item.read && styles.unreadNotification]}>
       <Text style={styles.notificationTitle}>{item.title}</Text>
       <Text style={styles.notificationMessage}>{item.message}</Text>
-      <Text style={styles.timestamp}>{formatTimestamp(item.timestamp)}</Text>
+      <Text style={styles.timestamp}>{formatNotificationTimestamp(item.timestamp)}</Text>
     </View>
   );
 
@@ -94,7 +92,7 @@ const NotificationsScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Notifications</Text>
       
       <View style={styles.notificationsToggle}>
@@ -108,22 +106,40 @@ const NotificationsScreen = () => {
       </View>
       
       <Text style={styles.sectionTitle}>Notification Settings</Text>
-      <FlatList
-        data={notificationSettings}
-        renderItem={renderSettingItem}
-        keyExtractor={item => item.id}
-        style={styles.settingsList}
-      />
+      <View style={styles.settingsList}>
+        {notificationSettings.map((item) => (
+          <View key={item.id} style={styles.settingItem}>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>{item.title}</Text>
+              <Text style={styles.settingDescription}>{item.description}</Text>
+            </View>
+            <Switch
+              trackColor={{ false: COLORS.accentGray, true: COLORS.accentRed }}
+              thumbColor={item.enabled ? COLORS.primaryBackground : COLORS.secondaryBackground}
+              onValueChange={item.setter}
+              value={item.enabled}
+            />
+          </View>
+        ))}
+      </View>
       
       <Text style={styles.sectionTitle}>Recent Notifications</Text>
-      <FlatList
-        data={sampleNotifications}
-        renderItem={renderNotificationItem}
-        keyExtractor={item => item.id}
-        style={styles.notificationsList}
-        contentContainerStyle={styles.notificationsListContent}
-      />
-    </View>
+      {notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No notifications yet</Text>
+        </View>
+      ) : (
+        <View style={styles.notificationsList}>
+          {notifications.map((item, index) => (
+            <View key={index} style={[styles.notificationItem, !item.read && styles.unreadNotification]}>
+              <Text style={styles.notificationTitle}>{item.title}</Text>
+              <Text style={styles.notificationMessage}>{item.message}</Text>
+              <Text style={styles.timestamp}>{formatNotificationTimestamp(item.timestamp)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </ScrollView>
   );
 };
 
@@ -131,89 +147,103 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primaryBackground,
-    padding: SPACING.medium,
+    padding: SPACING.lg,
   },
   title: {
     fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.large,
+    marginBottom: SPACING.xl,
+    textAlign: 'center',
   },
   notificationsToggle: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: COLORS.secondaryBackground,
-    padding: SPACING.medium,
-    borderRadius: 8,
-    marginBottom: SPACING.large,
+    padding: SPACING.md,
+    borderRadius: 12,
+    marginBottom: SPACING.xl,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   toggleLabel: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textPrimary,
+    fontWeight: '600',
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.body.fontSize,
+    fontSize: TYPOGRAPHY.subtitle.fontSize,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    marginBottom: SPACING.medium,
-    marginTop: SPACING.medium,
+    marginBottom: SPACING.md,
+    marginTop: SPACING.lg,
   },
   settingsList: {
-    marginBottom: SPACING.large,
+    marginBottom: SPACING.xl,
   },
   settingItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: COLORS.secondaryBackground,
-    padding: SPACING.medium,
-    borderRadius: 8,
-    marginBottom: SPACING.small,
+    padding: SPACING.md,
+    borderRadius: 12,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   settingText: {
     flex: 1,
-    marginRight: SPACING.medium,
+    marginRight: SPACING.md,
   },
   settingTitle: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
+    fontWeight: '600',
   },
   settingDescription: {
     fontSize: TYPOGRAPHY.secondary.fontSize,
     color: COLORS.textSecondary,
   },
   notificationsList: {
-    flex: 1,
-  },
-  notificationsListContent: {
-    paddingBottom: SPACING.large,
+    marginBottom: SPACING.xl,
   },
   notificationItem: {
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 8,
-    padding: SPACING.medium,
-    marginBottom: SPACING.small,
-    // Removed border styles as per UI guidelines - using spacing and background colors instead
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   unreadNotification: {
-    // Replaced border with background color variation for visual distinction
-    backgroundColor: '#F0F0F0', // Slightly different background for unread notifications
+    backgroundColor: '#F0F0F0',
   },
   notificationTitle: {
     fontSize: TYPOGRAPHY.body.fontSize,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
   },
   notificationMessage: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
   },
   timestamp: {
     fontSize: TYPOGRAPHY.secondary.fontSize,
+    color: COLORS.textSecondary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: SPACING.xl,
+    backgroundColor: COLORS.secondaryBackground,
+    borderRadius: 12,
+  },
+  emptyText: {
+    fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textSecondary,
   },
 });

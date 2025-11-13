@@ -16,7 +16,7 @@ export const TYPOGRAPHY = {
   fontFamily: 'Inter',
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   subtitle: {
     fontSize: 18,
@@ -24,23 +24,34 @@ export const TYPOGRAPHY = {
   },
   body: {
     fontSize: 16,
-    fontWeight: 'normal',
+    fontWeight: '400',
   },
   secondary: {
     fontSize: 13,
-    fontWeight: 'normal',
+    fontWeight: '400',
   },
   button: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+  },
+  caption: {
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  overline: {
+    fontSize: 10,
+    fontWeight: '600',
   },
 };
 
 // Spacing
 export const SPACING = {
-  small: 8,
-  medium: 16,
-  large: 24,
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
 };
 
 // Shadows

@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ApiService {
-    private static final String BASE_URL = "http://localhost:3000";
+    private static final String BASE_URL = (System.getenv("HAVEN_BACKEND_URL") != null ? System.getenv("HAVEN_BACKEND_URL").trim() : "http://localhost:3000").trim();
     private static ApiService instance;
     private HttpClient client;
     private Gson gson;
@@ -159,6 +159,27 @@ public class ApiService {
         }
     }
 
+    // Get all users (admin only)
+    public JsonObject getAllUsers() throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/api/v1/users"))
+                .header("Content-Type", "application/json")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        System.out.println("Get all users API response status: " + response.statusCode());
+        System.out.println("Get all users API response body: " + response.body());
+        
+        try {
+            return JsonParser.parseString(response.body()).getAsJsonObject();
+        } catch (JsonSyntaxException e) {
+            System.err.println("Invalid JSON response from get all users API: " + response.body());
+            throw e;
+        }
+    }
+
     // Emergency endpoints
     public JsonObject createEmergencyAlert(String type, String severity, String description, Map<String, Object> location) throws IOException, InterruptedException {
         Map<String, Object> alertData = new HashMap<>();
@@ -258,6 +279,27 @@ public class ApiService {
             return JsonParser.parseString(response.body()).getAsJsonObject();
         } catch (JsonSyntaxException e) {
             System.err.println("Invalid JSON response from update emergency status API: " + response.body());
+            throw e;
+        }
+    }
+    
+    // Get emergency statistics (admin only)
+    public JsonObject getEmergencyStatistics() throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/api/v1/emergencies/statistics"))
+                .header("Content-Type", "application/json")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        System.out.println("Get emergency statistics API response status: " + response.statusCode());
+        System.out.println("Get emergency statistics API response body: " + response.body());
+        
+        try {
+            return JsonParser.parseString(response.body()).getAsJsonObject();
+        } catch (JsonSyntaxException e) {
+            System.err.println("Invalid JSON response from get emergency statistics API: " + response.body());
             throw e;
         }
     }

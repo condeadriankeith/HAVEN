@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Picker, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Picker, Alert, ScrollView } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/styles';
 import { emergenciesAPI } from '../services/api';
 import { getCurrentLocation, reverseGeocode } from '../services/location';
@@ -71,7 +71,7 @@ const ReportFormScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Report Incident</Text>
       
       <View style={styles.formGroup}>
@@ -121,7 +121,7 @@ const ReportFormScreen = () => {
           {loading ? 'Submitting...' : 'Submit Report'}
         </Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -129,53 +129,61 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primaryBackground,
-    padding: SPACING.medium,
+    padding: SPACING.lg,
   },
   title: {
     fontSize: TYPOGRAPHY.title.fontSize,
     fontWeight: TYPOGRAPHY.title.fontWeight,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.large,
+    marginBottom: SPACING.xl,
     textAlign: 'center',
   },
   formGroup: {
-    marginBottom: SPACING.medium,
+    marginBottom: SPACING.lg,
   },
   label: {
     fontSize: TYPOGRAPHY.body.fontSize,
     color: COLORS.textPrimary,
-    marginBottom: SPACING.small,
+    marginBottom: SPACING.sm,
+    fontWeight: '600',
   },
   pickerContainer: {
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 4,
-    padding: SPACING.small,
+    borderRadius: 8,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   picker: {
     height: 50,
   },
   input: {
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 4,
-    paddingHorizontal: SPACING.small,
-    paddingVertical: SPACING.small,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
     fontSize: TYPOGRAPHY.body.fontSize,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   textArea: {
     backgroundColor: COLORS.secondaryBackground,
-    borderRadius: 4,
-    paddingHorizontal: SPACING.small,
-    paddingVertical: SPACING.small,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
     fontSize: TYPOGRAPHY.body.fontSize,
     textAlignVertical: 'top',
     minHeight: 100,
+    borderWidth: 1,
+    borderColor: COLORS.accentGray,
   },
   submitButton: {
     backgroundColor: COLORS.accentRed,
-    paddingVertical: SPACING.medium,
-    borderRadius: 4,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: SPACING.large,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.xl,
   },
   submitButtonDisabled: {
     backgroundColor: COLORS.accentGray,

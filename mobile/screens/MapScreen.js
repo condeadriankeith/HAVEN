@@ -8,6 +8,7 @@ import WebSocketService from '../services/websocket';
 import { FontAwesome } from '@expo/vector-icons';
 import { useResponsiveDimensions } from '../hooks/useResponsiveDimensions';
 import { scale, verticalScale, moderateScale } from '../utils/responsive';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const MapScreen = () => {
   const { width, height, aspectRatio } = useResponsiveDimensions();
@@ -16,16 +17,15 @@ const MapScreen = () => {
   const [loading, setLoading] = useState(true);
   const [mapView, setMapView] = useState(null);
   const [mapError, setMapError] = useState(null);
+  const [lastAlert, setLastAlert] = useState(null); // Track the last sent alert
   const webViewRef = useRef(null);
-
-
 
   useEffect(() => {
     loadActiveEmergencies();
     getCurrentLocation();
     
     // Subscribe to WebSocket emergency updates
-    const handleEmergencyUpdate = (emergency) => {
+    const handleEmergencyUpdate = async (emergency) => {
       // Update the emergencies list with the updated emergency
       setEmergencies(prevEmergencies => {
         // Check if emergency already exists
@@ -41,10 +41,62 @@ const MapScreen = () => {
         }
       });
       
+      // Calculate emergency fee for the updated emergency
+      if (emergency.location && emergency.location.latitude && emergency.location.longitude) {
+        const emergencyFee = calculateEmergencyFee(emergency.location.latitude, emergency.location.longitude);
+        
+        // Update the emergency with the fee
+        const emergencyWithFee = {
+          ...emergency,
+          emergencyFee
+        };
+        
+        // Update the emergencies list with the fee
+        setEmergencies(prevEmergencies => {
+          const existingIndex = prevEmergencies.findIndex(e => e.emergencyId === emergency.emergencyId);
+          if (existingIndex >= 0) {
+            const updated = [...prevEmergencies];
+            updated[existingIndex] = emergencyWithFee;
+            return updated;
+          } else {
+            return prevEmergencies.map(e => e.emergencyId === emergency.emergencyId ? emergencyWithFee : e);
+          }
+        });
+        
+        // Calculate and draw route for the updated emergency
+        const routeCoordinates = await calculateRoute(emergency.location.latitude, emergency.location.longitude);
+        
+        // Update the emergency with the route
+        const emergencyWithRoute = {
+          ...emergencyWithFee,
+          routeCoordinates
+        };
+        
+        // Update the emergencies list with the route
+        setEmergencies(prevEmergencies => {
+          const existingIndex = prevEmergencies.findIndex(e => e.emergencyId === emergency.emergencyId);
+          if (existingIndex >= 0) {
+            const updated = [...prevEmergencies];
+            updated[existingIndex] = emergencyWithRoute;
+            return updated;
+          } else {
+            return prevEmergencies.map(e => e.emergencyId === emergency.emergencyId ? emergencyWithRoute : e);
+          }
+        });
+        
+        // Set as last alert to display on map
+        setLastAlert(emergencyWithRoute);
+        
+        // Refresh map to show route
+        if (webViewRef.current) {
+          webViewRef.current.reload();
+        }
+      }
+      
       // Remove refreshMap call since we don't need refresh buttons
     };
 
-    const handleNewEmergencyAlert = (emergency) => {
+    const handleNewEmergencyAlert = async (emergency) => {
       // Add new emergency to the list
       setEmergencies(prevEmergencies => {
         // Check if emergency already exists
@@ -59,6 +111,58 @@ const MapScreen = () => {
           return [...prevEmergencies, emergency];
         }
       });
+    
+      // Calculate emergency fee for the new emergency
+      if (emergency.location && emergency.location.latitude && emergency.location.longitude) {
+        const emergencyFee = calculateEmergencyFee(emergency.location.latitude, emergency.location.longitude);
+        
+        // Update the emergency with the fee
+        const emergencyWithFee = {
+          ...emergency,
+          emergencyFee
+        };
+        
+        // Update the emergencies list with the fee
+        setEmergencies(prevEmergencies => {
+          const existingIndex = prevEmergencies.findIndex(e => e.emergencyId === emergency.emergencyId);
+          if (existingIndex >= 0) {
+            const updated = [...prevEmergencies];
+            updated[existingIndex] = emergencyWithFee;
+            return updated;
+          } else {
+            return prevEmergencies.map(e => e.emergencyId === emergency.emergencyId ? emergencyWithFee : e);
+          }
+        });
+        
+        // Calculate and draw route for the new emergency
+        const routeCoordinates = await calculateRoute(emergency.location.latitude, emergency.location.longitude);
+        
+        // Update the emergency with the route
+        const emergencyWithRoute = {
+          ...emergencyWithFee,
+          routeCoordinates
+        };
+        
+        // Update the emergencies list with the route
+        setEmergencies(prevEmergencies => {
+          const existingIndex = prevEmergencies.findIndex(e => e.emergencyId === emergency.emergencyId);
+          if (existingIndex >= 0) {
+            const updated = [...prevEmergencies];
+            updated[existingIndex] = emergencyWithRoute;
+            return updated;
+          } else {
+            return prevEmergencies.map(e => e.emergencyId === emergency.emergencyId ? emergencyWithRoute : e);
+          }
+        });
+        
+        // Set as last alert to display on map
+        setLastAlert(emergencyWithRoute);
+        
+        // Refresh map to show route
+        if (webViewRef.current) {
+          webViewRef.current.reload();
+        }
+      }
       
       // Remove refreshMap call since we don't need refresh buttons
     };
@@ -176,6 +280,14 @@ const MapScreen = () => {
             width: 40px;
             height: 40px;
           }
+          .vet-hub-marker {
+            width: 20px;
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+          }
           .legend {
             background: white;
             padding: 12px;
@@ -250,6 +362,12 @@ const MapScreen = () => {
             color: #8A8A8A;
             margin-top: 6px;
           }
+          .emergency-fee {
+            font-size: 14px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-top: 6px;
+          }
         </style>
       </head>
       <body>
@@ -263,6 +381,18 @@ const MapScreen = () => {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
           }).addTo(map);
+          
+          // Add vet hub marker (SM City Bacolod)
+          const vetHubMarker = L.marker([10.6722, 122.9443], {
+            icon: L.divIcon({
+              className: 'vet-hub-marker',
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+              html: '<div class="vet-hub-marker"></div>'
+            })
+          }).addTo(map)
+            .bindPopup('<b>Vet Hub</b><br>SM City Bacolod')
+            .openPopup();
           
           // Add user location marker if available
           ${userLocation ? `
@@ -335,6 +465,7 @@ const MapScreen = () => {
             const emergencyId = escapeHtml(emergency.emergencyId || 'N/A');
             const address = emergency.location && emergency.location.address ? escapeHtml(emergency.location.address) : '';
             const reporter = escapeHtml(reporterName);
+            const emergencyFee = emergency.emergencyFee || 0;
                         
             // Build popup content using string concatenation to avoid template literal issues
             let popupContent = '<div class="emergency-popup">' +
@@ -349,6 +480,10 @@ const MapScreen = () => {
                         
             if (displayTimestamp) {
               popupContent += '<div class="emergency-timestamp">' + displayTimestamp + '</div>';
+            }
+            
+            if (emergencyFee > 0) {
+              popupContent += '<div class="emergency-fee">Emergency Fee: ₱' + emergencyFee + '</div>';
             }
                         
             popupContent += '</div>';
@@ -367,24 +502,50 @@ const MapScreen = () => {
               .bindPopup(popupContent);
           });
           
-          // Add legend
-          const legend = L.control({ position: 'bottomright' });
+          // Add legend to top right corner
+          const legend = L.control({ position: 'topright' });
           legend.onAdd = function(map) {
             const div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = \`
-              <h4>Map Legend</h4>
-              <div class="legend-item">
-                <div class="legend-color user-color"></div>
-                <span>Your Location</span>
-              </div>
-              <div class="legend-item">
-                <div class="legend-color emergency-color"></div>
-                <span>Emergency</span>
-              </div>
-            \`;
+            div.innerHTML = '<h4>Map Legend</h4>' +
+              '<div class="legend-item">' +
+                '<div class="legend-color user-color"></div>' +
+                '<span>Your Location</span>' +
+              '</div>' +
+              '<div class="legend-item">' +
+                '<div class="legend-color emergency-color"></div>' +
+                '<span>Emergency</span>' +
+              '</div>' +
+              '<div class="legend-item">' +
+                '<div class="legend-color" style="background-color: #4CAF50;"></div>' +
+                '<span>Vet Hub</span>' +
+              '</div>';
             return div;
           };
           legend.addTo(map);
+          
+          // Function to draw route
+          function drawRoute(coordinates) {
+            if (window.routeLine) {
+              map.removeLayer(window.routeLine);
+            }
+            
+            if (coordinates && coordinates.length > 0) {
+              window.routeLine = L.polyline(coordinates, {
+                color: '#ff0000',
+                weight: 5,
+                opacity: 0.8
+              }).addTo(map);
+              
+              // Fit map to show route
+              map.fitBounds(window.routeLine.getBounds(), { padding: [50, 50] });
+            }
+          }
+          
+          // Check if we have a last alert to display route for
+          const lastAlertData = ${lastAlert ? JSON.stringify(lastAlert) : 'null'};
+          if (lastAlertData && lastAlertData.routeCoordinates) {
+            drawRoute(lastAlertData.routeCoordinates);
+          }
         </script>
       </body>
       </html>
@@ -402,13 +563,131 @@ const MapScreen = () => {
     setLoading(false);
   };
 
+  // Function to calculate emergency fee based on distance
+  const calculateEmergencyFee = (lat, lng) => {
+    // Calculate distance using Haversine formula (simplified)
+    const vetHubLat = 10.6722;
+    const vetHubLng = 122.9443;
+    
+    const toRadians = (degrees) => degrees * (Math.PI / 180);
+    
+    const R = 6371; // Earth radius in km
+    const dLat = toRadians(lat - vetHubLat);
+    const dLon = toRadians(lng - vetHubLng);
+    
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(vetHubLat)) * Math.cos(toRadians(lat)) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distanceKm = R * c;
+    
+    // Calculate fee based on distance
+    if (distanceKm <= 0) {
+      return 0;
+    } else if (distanceKm <= 5) {
+      return 500;  // ₱500 for 0–5 km
+    } else if (distanceKm <= 10) {
+      return 750;  // ₱750 for 5–10 km
+    } else if (distanceKm <= 15) {
+      return 1000; // ₱1,000 for 10–15 km
+    } else if (distanceKm <= 20) {
+      return 1500; // ₱1,500 for 15–20 km
+    } else {
+      return 2000; // ₱2,000 for 20 km and above
+    }
+  };
+
+  // Function to decode Google Maps encoded polyline
+  const decodePolyline = (encoded) => {
+    try {
+      if (!encoded) {
+        console.warn('Empty encoded polyline');
+        return [];
+      }
+      
+      let index = 0;
+      let lat = 0;
+      let lng = 0;
+      const coordinates = [];
+      
+      while (index < encoded.length) {
+        // Decode latitude
+        let shift = 0;
+        let result = 0;
+        let byte;
+        
+        do {
+          byte = encoded.charCodeAt(index++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+        
+        const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+        lat += dlat;
+        
+        // Decode longitude
+        shift = 0;
+        result = 0;
+        
+        do {
+          byte = encoded.charCodeAt(index++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+        
+        const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+        lng += dlng;
+        
+        // Convert from E5 format (1e-5) to decimal degrees
+        const latitude = lat * 1e-5;
+        const longitude = lng * 1e-5;
+        
+        coordinates.push([latitude, longitude]);
+      }
+      
+      return coordinates;
+    } catch (error) {
+      console.error('Error decoding polyline:', error);
+      return [];
+    }
+  };
+
+  // Function to calculate route using the backend API
+  const calculateRoute = async (lat, lng) => {
+    try {
+      // Vet hub coordinates
+      const vetHubLat = 10.6722;
+      const vetHubLng = 122.9443;
+      
+      // Call the backend API to calculate the route
+      const response = await emergenciesAPI.calculateRoute(vetHubLat, vetHubLng, lat, lng);
+      
+      if (response.data.success && response.data.route) {
+        // Decode the polyline to get actual coordinates
+        const coordinates = decodePolyline(response.data.route);
+        return coordinates;
+      } else {
+        console.warn('Failed to calculate route, returning straight line');
+        // Fallback to straight line
+        return [
+          [vetHubLat, vetHubLng], // Vet hub
+          [lat, lng] // Emergency location
+        ];
+      }
+    } catch (error) {
+      console.error('Error calculating route:', error);
+      // Fallback to straight line
+      return [
+        [10.6722, 122.9443], // Vet hub
+        [lat, lng] // Emergency location
+      ];
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Live Emergency Map</Text>
-        <Text style={styles.subtitle}>Real-time alerts from the community</Text>
-      </View>
-      
       <View style={styles.mapContainer}>
         {loading && (
           <View style={styles.loadingContainer}>
@@ -447,16 +726,10 @@ const MapScreen = () => {
                 </View>
               )}
             />
-            {/* Remove the refresh button since the system is supposed to be constantly refreshing for real-time updates */}
             
             {/* Center on user FAB */}
             <TouchableOpacity style={styles.centerFab} onPress={getCurrentLocation}>
               <FontAwesome name="location-arrow" size={20} color="white" />
-            </TouchableOpacity>
-            
-            {/* Floating list button */}
-            <TouchableOpacity style={styles.listFab}>
-              <FontAwesome name="list-alt" size={20} color="white" />
             </TouchableOpacity>
           </>
         )}
@@ -464,10 +737,8 @@ const MapScreen = () => {
       
       {/* Top overlay card */}
       <View style={styles.topCard}>
-        <Text style={styles.topTitle}>HAVEN — Map</Text>
-        <Text style={styles.topSubtitle}>
-          {emergencies.length} active alert{emergencies.length !== 1 ? 's' : ''} • {userLocation ? 'Live' : 'No GPS'}
-        </Text>
+        <Text style={styles.topTitle}>HAVEN</Text>
+        <Text style={styles.topSubtitle}>Pet Emergency Response System</Text>
       </View>
     </View>
   );
@@ -477,24 +748,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primaryBackground,
-  },
-  header: {
-    padding: moderateScale(SPACING.lg),
-    backgroundColor: COLORS.secondaryBackground,
-    marginBottom: moderateScale(SPACING.md),
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: moderateScale(TYPOGRAPHY.title.fontSize),
-    fontWeight: TYPOGRAPHY.title.fontWeight,
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: moderateScale(TYPOGRAPHY.body.fontSize),
-    color: COLORS.textSecondary,
-    marginTop: moderateScale(SPACING.sm),
-    textAlign: 'center',
   },
   mapContainer: {
     flex: 1,
@@ -566,24 +819,11 @@ const styles = StyleSheet.create({
   centerFab: {
     position: 'absolute',
     right: moderateScale(16),
-    bottom: verticalScale(120),
+    bottom: verticalScale(30),
     width: scale(52),
     height: scale(52),
     borderRadius: scale(26),
     backgroundColor: '#2a81f7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    zIndex: 10,
-  },
-  listFab: {
-    position: 'absolute',
-    left: moderateScale(16),
-    bottom: verticalScale(120),
-    width: scale(52),
-    height: scale(52),
-    borderRadius: scale(26),
-    backgroundColor: '#444',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 6,

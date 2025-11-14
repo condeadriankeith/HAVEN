@@ -219,6 +219,8 @@ const HomeScreen = ({ navigation }) => {
       if (response.success) {
         const successLog = `Emergency alert sent successfully with ID: ${response.data.emergencyId}`;
         log(successLog);
+        
+        // Show success message
         Alert.alert(
           'Emergency Alert Sent',
           'Your emergency alert has been sent to all responders. Help is on the way!',
@@ -242,8 +244,8 @@ const HomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>HAVEN Emergency Response</Text>
-        <Text style={styles.subtitle}>Pet Emergency Alert System</Text>
+        <Text style={styles.title}>HAVEN</Text>
+        <Text style={styles.subtitle}>Pet Emergency Response System</Text>
       </View>
       
       <View style={styles.content}>
@@ -342,6 +344,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: moderateScale(SPACING.lg),
+    alignItems: 'center', // Add this to center children horizontally
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -352,6 +355,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: moderateScale(BORDERS.radius),
     ...SHADOWS.small,
+    alignSelf: 'center', // Add this to center the loading container
   },
   loadingText: {
     marginLeft: moderateScale(SPACING.md),
@@ -364,6 +368,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: moderateScale(BORDERS.radius),
     ...SHADOWS.small,
+    width: '100%', // Ensure full width
   },
   infoTitle: {
     fontSize: moderateScale(TYPOGRAPHY.subtitle.fontSize),
@@ -403,6 +408,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: moderateScale(BORDERS.radius),
     ...SHADOWS.small,
+    width: '100%', // Ensure full width
   },
   featuresTitle: {
     fontSize: moderateScale(TYPOGRAPHY.subtitle.fontSize),

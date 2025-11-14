@@ -19,22 +19,27 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.AudioInputStream;
 import java.io.File;
+import com.haven.services.UserService;
 
-public class HavenDashboard extends JFrame {
+public class HavenDashboard extends JFrame implements AlertPanel.AlertResponseListener {
 
     private CardLayout centerCardLayout;
     private JPanel centerCardPanel;
     private MapPanel mapPanel;
     private AlertPanel alertPanel;
     private AtomicInteger markerCounter = new AtomicInteger(0);
-    private ApiService apiService;
+    private UserService userService;
     private Timer dataRefreshTimer;
     private WebSocketClient webSocketClient;
-
-    // User data model
-    private List<User> allUsers = new ArrayList<>();
-    private List<User> onlineUsers = new ArrayList<>();
-
+    private final List<User> allUsers = new ArrayList<>();
+    private final List<User> onlineUsers = new ArrayList<>();
+    private AlertPanel.AlertData currentlySelectedEmergency = null; // Track the currently selected emergency
+    
+    // Store references to users panel components for updating
+    private JTabbedPane usersTabbedPane;
+    private JPanel allUsersPanel;
+    private JPanel onlineUsersPanel;
+    
     // Add fields to track emergency statistics
     private int totalReports = 0;
     private int activeReports = 0;
@@ -42,17 +47,22 @@ public class HavenDashboard extends JFrame {
     private int resolvedReports = 0;
 
     public HavenDashboard() {
-        setTitle("HAVEN - Pet Emergency Response Dashboard");
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1400, 900);
+        setTitle("HAVEN - Pet Emergency Rescuer");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(1200, 800);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout());
+        
+        // Initialize panels
+        alertPanel = new AlertPanel(this::onAlertClicked, this::onAlertDeselected); // Pass the deselect handler
+        mapPanel = new MapPanel();
         
         // Initialize API service
-        apiService = ApiService.getInstance();
+        userService = ApiService.getInstance();
         
-        // Initialize user data
-        initializeUserData();
+        // Login with default credentials to access protected endpoints
+        loginWithDefaultCredentials();
+        
+        // Initialize user data will be called after authentication in loginWithDefaultCredentials()
         
         initUI();
         
@@ -110,8 +120,59 @@ public class HavenDashboard extends JFrame {
     }
 
     private String loginWithDefaultCredentials() {
-        // For prototype, we don't need to authenticate
-        // Return null to indicate no authentication is needed
+        try {
+            // Login as admin user to access protected endpoints
+            // Cast to ApiService since it implements the login method
+            if (userService instanceof ApiService) {
+                ApiService apiService = (ApiService) userService;
+                
+                // Test connection first
+                if (!apiService.testConnection()) {
+                    System.err.println("Cannot connect to backend server at: " + apiService.getBaseUrl());
+                    // Still try to fetch users as fallback
+                    SwingUtilities.invokeLater(() -> {
+                        System.out.println("Fetching user data without connection...");
+                        initializeUserData();
+                    });
+                    return null;
+                }
+                
+                System.out.println("Attempting to login as admin user...");
+                JsonObject loginResponse = apiService.login("admin@example.com", "admin123");
+                System.out.println("Login response: " + (loginResponse != null ? loginResponse.toString() : "null"));
+                if (loginResponse != null && loginResponse.has("token")) {
+                    String token = loginResponse.get("token").getAsString();
+                    // Set the auth token in the API service
+                    apiService.setAuthToken(token);
+                    System.out.println("Successfully logged in as admin user with token: " + token);
+                    
+                    // Fetch users after successful authentication
+                    SwingUtilities.invokeLater(() -> {
+                        System.out.println("Fetching user data after authentication...");
+                        initializeUserData();
+                    });
+                    
+                    return token;
+                } else {
+                    System.err.println("Login failed: No token in response");
+                    // Even if login fails, try to fetch users (in case backend doesn't require auth for testing)
+                    SwingUtilities.invokeLater(() -> {
+                        System.out.println("Fetching user data without authentication...");
+                        initializeUserData();
+                    });
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to login as admin user: " + e.getMessage());
+            e.printStackTrace();
+            // Even if login fails, try to fetch users (in case backend doesn't require auth for testing)
+            SwingUtilities.invokeLater(() -> {
+                System.out.println("Fetching user data after login exception...");
+                initializeUserData();
+            });
+        }
+        
+        // Return null to indicate no authentication is needed (fallback)
         return null;
     }
 
@@ -122,127 +183,140 @@ public class HavenDashboard extends JFrame {
                 
                 // Extract emergency data with proper field names from the backend
                 String id = emergency.has("emergencyId") ? emergency.get("emergencyId").getAsString() : 
-                       (emergency.has("id") ? emergency.get("id").getAsString() : "Unknown");
+                   (emergency.has("id") ? emergency.get("id").getAsString() : "Unknown");
                 String type = emergency.has("emergencyType") ? emergency.get("emergencyType").getAsString() : 
-                         (emergency.has("type") ? emergency.get("type").getAsString() : "Pet Emergency");
+                     (emergency.has("type") ? emergency.get("type").getAsString() : "Pet Emergency");
                 String description = emergency.has("notes") ? emergency.get("notes").getAsString() : 
-                                (emergency.has("description") ? emergency.get("description").getAsString() : "Pet Emergency Reported");
+                            (emergency.has("description") ? emergency.get("description").getAsString() : "Pet Emergency Reported");
                 String status = emergency.has("status") ? emergency.get("status").getAsString() : "ACTIVE";
+        
+            // Extract user information
+            String userName = emergency.has("userName") ? emergency.get("userName").getAsString() : "User";
+            String userPhone = emergency.has("userPhone") ? emergency.get("userPhone").getAsString() : "";
+            String userEmail = emergency.has("userEmail") ? emergency.get("userEmail").getAsString() : "";
+            String userPets = emergency.has("userPets") ? emergency.get("userPets").getAsString() : "[]";
             
-                // Extract user information
-                String userName = emergency.has("userName") ? emergency.get("userName").getAsString() : "User";
-                String userPhone = emergency.has("userPhone") ? emergency.get("userPhone").getAsString() : "";
-                String userEmail = emergency.has("userEmail") ? emergency.get("userEmail").getAsString() : "";
-                String userPets = emergency.has("userPets") ? emergency.get("userPets").getAsString() : "[]";
-                
-                // Create contact information string
-                String contactInfo = "";
-                if (!userPhone.isEmpty() && !userEmail.isEmpty()) {
-                    contactInfo = userPhone + " / " + userEmail;
-                } else if (!userPhone.isEmpty()) {
-                    contactInfo = userPhone;
-                } else if (!userEmail.isEmpty()) {
-                    contactInfo = userEmail;
+            // Create contact information string
+            String contactInfo = "";
+            if (!userPhone.isEmpty() && !userEmail.isEmpty()) {
+                contactInfo = userPhone + " / " + userEmail;
+            } else if (!userPhone.isEmpty()) {
+                contactInfo = userPhone;
+            } else if (!userEmail.isEmpty()) {
+                contactInfo = userEmail;
+            }
+        
+            // Extract latitude and longitude, handling both flat and nested structures
+            double lat = 10.6951; // Default to Bacolod center
+            double lng = 122.9527; // Default to Bacolod center
+        
+            System.out.println("Raw emergency data: " + emergency.toString());
+        
+            // Check for nested structure (from WebSocket direct send)
+            if (emergency.has("location")) {
+                JsonObject location = emergency.getAsJsonObject("location");
+                System.out.println("Location object: " + location.toString());
+                if (location.has("latitude") && location.has("longitude")) {
+                    lat = location.get("latitude").getAsDouble();
+                    lng = location.get("longitude").getAsDouble();
+                    System.out.println("Extracted coordinates from nested location: " + lat + ", " + lng);
                 }
-            
-                // Extract latitude and longitude, handling both flat and nested structures
-                double lat = 10.6951; // Default to Bacolod center
-                double lng = 122.9527; // Default to Bacolod center
-            
-                System.out.println("Raw emergency data: " + emergency.toString());
-            
-                // Check for nested structure (from WebSocket direct send)
-                if (emergency.has("location")) {
-                    JsonObject location = emergency.getAsJsonObject("location");
-                    System.out.println("Location object: " + location.toString());
+            }
+            // Check for flat structure (from REST API) as fallback
+            else if (emergency.has("latitude") && emergency.has("longitude")) {
+                lat = emergency.get("latitude").getAsDouble();
+                lng = emergency.get("longitude").getAsDouble();
+                System.out.println("Extracted coordinates from flat structure: " + lat + ", " + lng);
+            }
+            // Check for nested emergency object (from mobile app WebSocket structure)
+            else if (emergency.has("emergency")) {
+                JsonObject nestedEmergency = emergency.getAsJsonObject("emergency");
+                if (nestedEmergency.has("location")) {
+                    JsonObject location = nestedEmergency.getAsJsonObject("location");
                     if (location.has("latitude") && location.has("longitude")) {
                         lat = location.get("latitude").getAsDouble();
                         lng = location.get("longitude").getAsDouble();
-                        System.out.println("Extracted coordinates from nested location: " + lat + ", " + lng);
+                        System.out.println("Extracted coordinates from nested emergency.location: " + lat + ", " + lng);
                     }
+                } else if (nestedEmergency.has("latitude") && nestedEmergency.has("longitude")) {
+                    lat = nestedEmergency.get("latitude").getAsDouble();
+                    lng = nestedEmergency.get("longitude").getAsDouble();
+                    System.out.println("Extracted coordinates from nested emergency: " + lat + ", " + lng);
                 }
-                // Check for flat structure (from REST API) as fallback
-                else if (emergency.has("latitude") && emergency.has("longitude")) {
-                    lat = emergency.get("latitude").getAsDouble();
-                    lng = emergency.get("longitude").getAsDouble();
-                    System.out.println("Extracted coordinates from flat structure: " + lat + ", " + lng);
+            }
+        
+            // Validate coordinates are within reasonable bounds for Bacolod City
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                System.err.println("Invalid coordinates detected: " + lat + ", " + lng + ". Using default Bacolod coordinates.");
+                lat = 10.6765;
+                lng = 122.9509;
+            }
+        
+            System.out.println("Final coordinates to be used: " + lat + ", " + lng);
+        
+            // Calculate emergency fee based on distance
+            int emergencyFee = 0;
+            try {
+                OpenRouteService ors = OpenRouteService.getInstance();
+                double distance = ors.calculateDistance(lat, lng);
+                if (distance >= 0) {
+                    emergencyFee = ors.calculateEmergencyFee(distance);
+                    System.out.println("Calculated distance: " + distance + " km, Emergency fee: ₱" + emergencyFee);
+                } else {
+                    System.err.println("Failed to calculate distance for emergency fee calculation");
                 }
-                // Check for nested emergency object (from mobile app WebSocket structure)
-                else if (emergency.has("emergency")) {
-                    JsonObject nestedEmergency = emergency.getAsJsonObject("emergency");
-                    if (nestedEmergency.has("location")) {
-                        JsonObject location = nestedEmergency.getAsJsonObject("location");
-                        if (location.has("latitude") && location.has("longitude")) {
-                            lat = location.get("latitude").getAsDouble();
-                            lng = location.get("longitude").getAsDouble();
-                            System.out.println("Extracted coordinates from nested emergency.location: " + lat + ", " + lng);
-                        }
-                    } else if (nestedEmergency.has("latitude") && nestedEmergency.has("longitude")) {
-                        lat = nestedEmergency.get("latitude").getAsDouble();
-                        lng = nestedEmergency.get("longitude").getAsDouble();
-                        System.out.println("Extracted coordinates from nested emergency: " + lat + ", " + lng);
-                    }
-                }
-            
-                // Validate coordinates are within reasonable bounds for Bacolod City
-                if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                    System.err.println("Invalid coordinates detected: " + lat + ", " + lng + ". Using default Bacolod coordinates.");
-                    lat = 10.6765;
-                    lng = 122.9509;
-                }
-            
-                System.out.println("Final coordinates to be used: " + lat + ", " + lng);
-            
-                // Additional validation to prevent ocean coordinates
-                if (lat == 0 && lng == 0) {
-                    System.err.println("Warning: Coordinates are 0,0 (middle of ocean). Using default Bacolod coordinates.");
-                    lat = 10.6765;
-                    lng = 122.9509;
-                }
-            
-                // Extract location accuracy and other details if available
-                String address = emergency.has("address") ? emergency.get("address").getAsString() : 
-                            (emergency.has("location") && emergency.getAsJsonObject("location").has("address") ? 
-                             emergency.getAsJsonObject("location").get("address").getAsString() : 
-                             (emergency.has("emergency") && emergency.getAsJsonObject("emergency").has("location") && 
-                              emergency.getAsJsonObject("emergency").getAsJsonObject("location").has("address") ?
-                              emergency.getAsJsonObject("emergency").getAsJsonObject("location").get("address").getAsString() :
-                              "Location in Bacolod City"));
-            
-                System.out.println("Processing emergency update: " + id + " - " + type + " - " + status);
-                System.out.println("Emergency location: " + lat + ", " + lng);
-            
-                // Add to alert panel with full location details and pet information
-                String alertDescription = description + (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy") ?
-                " (Accuracy: " + emergency.getAsJsonObject("location").get("accuracy").getAsDouble() + "m)" : 
-                (emergency.has("accuracy") ? 
-                 " (Accuracy: " + emergency.get("accuracy").getAsDouble() + "m)" : ""));
-                alertPanel.addAlert(new AlertPanel.AlertData(type, alertDescription, userName, id, lat, lng, userPets, contactInfo));
-            
-                // Add animated marker to map with proper title
-                String markerTitle = type + " (" + id + ")";
-                if (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy")) {
-                    markerTitle += " ±" + String.format("%.0f", emergency.getAsJsonObject("location").get("accuracy").getAsDouble()) + "m";
-                } else if (emergency.has("accuracy")) {
-                    markerTitle += " ±" + String.format("%.0f", emergency.get("accuracy").getAsDouble()) + "m";
-                }
-                mapPanel.addMarker(lat, lng, markerTitle, true, id); // Highlight the new marker and pass the emergency ID
-                mapPanel.centerOn(lat, lng); // Center the map on the new emergency location
-            
-                // Update analytics dashboard based on status
-                updateAnalyticsForEmergency(status, "NEW");
-            
-                // Show notification
-                showDesktopNotification("🚨 New Pet Emergency", 
-                    "Emergency reported at coordinates: " + lat + ", " + lng);
             } catch (Exception e) {
-                System.err.println("Error processing emergency update: " + e.getMessage());
-                System.err.println("Emergency data: " + emergency.toString());
+                System.err.println("Error calculating emergency fee: " + e.getMessage());
                 e.printStackTrace();
             }
-        });
-    }
-
+        
+            // Extract location accuracy and other details if available
+            String address = emergency.has("address") ? emergency.get("address").getAsString() : 
+                        (emergency.has("location") && emergency.getAsJsonObject("location").has("address") ? 
+                         emergency.getAsJsonObject("location").get("address").getAsString() : 
+                         (emergency.has("emergency") && emergency.getAsJsonObject("emergency").has("location") && 
+                          emergency.getAsJsonObject("emergency").getAsJsonObject("location").has("address") ?
+                          emergency.getAsJsonObject("emergency").getAsJsonObject("location").get("address").getAsString() :
+                          "Location in Bacolod City"));
+        
+            System.out.println("Processing emergency update: " + id + " - " + type + " - " + status);
+            System.out.println("Emergency location: " + lat + ", " + lng);
+        
+            // Add to alert panel with full location details and pet information
+            String alertDescription = description + (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy") ?
+            " (Accuracy: " + emergency.getAsJsonObject("location").get("accuracy").getAsDouble() + "m)" : 
+            (emergency.has("accuracy") ? 
+             " (Accuracy: " + emergency.get("accuracy").getAsDouble() + "m)" : ""));
+            alertPanel.addAlert(new AlertPanel.AlertData.Builder(type, alertDescription, userName, id, lat, lng)
+                .pets(userPets)
+                .contactInfo(contactInfo)
+                .emergencyFee(emergencyFee)
+                .build());
+        
+            // Add animated marker to map with proper title
+            String markerTitle = type + " (" + id + ")";
+            if (emergency.has("location") && emergency.getAsJsonObject("location").has("accuracy")) {
+                markerTitle += " ±" + String.format("%.0f", emergency.getAsJsonObject("location").get("accuracy").getAsDouble()) + "m";
+            } else if (emergency.has("accuracy")) {
+                markerTitle += " ±" + String.format("%.0f", emergency.get("accuracy").getAsDouble()) + "m";
+            }
+            // Pass the emergency ID to the addMarker method
+            mapPanel.addMarker(lat, lng, markerTitle, true, id);
+            mapPanel.centerOn(lat, lng); // Center the map on the new emergency location
+        
+            // Update analytics dashboard based on status
+            updateAnalyticsForEmergency(status, "NEW");
+        
+            // Show notification
+            showDesktopNotification("🚨 New Pet Emergency", 
+                "Emergency reported at coordinates: " + lat + ", " + lng + "\nEmergency Fee: ₱" + emergencyFee);
+        } catch (Exception e) {
+            System.err.println("Error processing emergency update: " + e.getMessage());
+            System.err.println("Emergency data: " + emergency.toString());
+            e.printStackTrace();
+        }
+    });
+}
     // Method to update analytics dashboard based on emergency status
     private void updateAnalyticsForEmergency(String status, String updateType) {
         // Update statistics based on emergency status
@@ -263,6 +337,12 @@ public class HavenDashboard extends JFrame {
                 // For demo purposes, we'll add a fixed response time
                 totalResponseTime += 300; // 5 minutes
             }
+        } else if ("RESPONDED".equals(updateType)) {
+            // Emergency was responded to (but not necessarily resolved)
+            // This is for the new analytics logic where we track responded alerts
+            resolvedReports++;
+            // For demo purposes, we'll add a fixed response time
+            totalResponseTime += 180; // 3 minutes
         }
         
         // Update the stat cards in the analytics panel
@@ -342,11 +422,21 @@ public class HavenDashboard extends JFrame {
         // Run in a separate thread to avoid blocking the UI
         new Thread(() -> {
             try {
+                System.out.println("Fetching users from backend API...");
+                // Check if we're using ApiService and if it has a token
+                if (userService instanceof ApiService) {
+                    ApiService apiService = (ApiService) userService;
+                    System.out.println("Current auth token: " + apiService.getAuthToken());
+                }
+                
                 // Fetch users from the real backend API
-                JsonObject usersResponse = apiService.getAllUsers();
+                JsonObject usersResponse = userService.getAllUsers();
+                
+                System.out.println("Users API response: " + (usersResponse != null ? usersResponse.toString() : "null"));
                 
                 if (usersResponse != null && usersResponse.has("users")) {
                     JsonArray usersArray = usersResponse.getAsJsonArray("users");
+                    System.out.println("Number of users received: " + usersArray.size());
                     
                     // Update UI on EDT
                     SwingUtilities.invokeLater(() -> {
@@ -356,6 +446,7 @@ public class HavenDashboard extends JFrame {
                         // Parse users from response
                         for (int i = 0; i < usersArray.size(); i++) {
                             JsonObject userJson = usersArray.get(i).getAsJsonObject();
+                            System.out.println("Processing user: " + userJson.toString());
                             
                             User user = new User(
                                 userJson.has("id") ? userJson.get("id").getAsString() : "",
@@ -369,10 +460,19 @@ public class HavenDashboard extends JFrame {
                             
                             allUsers.add(user);
                         }
+                        System.out.println("Total users in allUsers list: " + allUsers.size());
                         
                         // Refresh the users panel
                         refreshUsersPanel();
                     });
+                } else {
+                    System.out.println("No users found in response or invalid response format");
+                    // Check if there's an error message in the response
+                    if (usersResponse != null && usersResponse.has("error")) {
+                        System.out.println("Error from users API: " + usersResponse.get("error").getAsString());
+                    } else if (usersResponse != null) {
+                        System.out.println("Users response keys: " + usersResponse.keySet());
+                    }
                 }
             } catch (Exception e) {
                 System.err.println("Error fetching users from backend: " + e.getMessage());
@@ -412,8 +512,10 @@ public class HavenDashboard extends JFrame {
         JPanel leftSidebar = createLeftSidebar();
         add(leftSidebar, BorderLayout.WEST);
 
-        // Right alerts panel - removed the second parameter since the add button is no longer needed
-        alertPanel = new AlertPanel(this::onAlertClicked);
+        // Right alerts panel - pass this as the response listener
+        alertPanel = new AlertPanel(this::onAlertClicked, this::onAlertDeselected);
+        // Set the alert remove listener to handle removal of alerts and map markers
+        alertPanel.setAlertRemoveListener(this::onAlertRemoved);
         add(alertPanel, BorderLayout.EAST);
 
         // Center area with CardLayout
@@ -422,6 +524,8 @@ public class HavenDashboard extends JFrame {
 
         // Map page
         mapPanel = new MapPanel();
+        // Set up marker click listener
+        mapPanel.setMarkerClickListener(this::onMarkerClicked);
         centerCardPanel.add(createMapPanel(), "MAP");
 
         // Analytics page (simple placeholder)
@@ -442,16 +546,18 @@ public class HavenDashboard extends JFrame {
     }
 
     private void startDataRefresh() {
-        // Remove periodic data refresh since we're using real-time WebSocket updates
-        // dataRefreshTimer = new Timer();
-        // dataRefreshTimer.scheduleAtFixedRate(new TimerTask() {
-        //     @Override
-        //     public void run() {
-        //         // Removed simulation of random alerts
-        //         // fetchNewAlerts() was creating fake alerts
-        //         // Real alerts are now received via WebSocket only
-        //     }
-        // }, 5000, 10000); // Refresh every 10 seconds
+        // Start periodic data refresh for users data
+        dataRefreshTimer = new Timer();
+        dataRefreshTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                // Refresh users data every 30 seconds
+                SwingUtilities.invokeLater(() -> {
+                    System.out.println("Periodic users data refresh...");
+                    initializeUserData();
+                });
+            }
+        }, 5000, 30000); // Refresh every 30 seconds after 5 seconds initial delay
     }
 
     private void fetchNewAlerts() {
@@ -467,7 +573,7 @@ public class HavenDashboard extends JFrame {
         top.setLayout(new BorderLayout(10, 10));
         top.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 16));
 
-        JLabel title = new JLabel("HAVEN — Emergency Response");
+        JLabel title = new JLabel("HAVEN - Pet Emergency Response System");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
         title.setForeground(new Color(255, 59, 48)); // HAVEN Red
         top.add(title, BorderLayout.WEST);
@@ -519,7 +625,11 @@ public class HavenDashboard extends JFrame {
         btnUsers.setPreferredSize(new Dimension(50, 50));
         btnUsers.setMaximumSize(new Dimension(50, 50));
         btnUsers.setFont(btnUsers.getFont().deriveFont(20f));
-        btnUsers.addActionListener(e -> centerCardLayout.show(centerCardPanel, "USERS"));
+        btnUsers.addActionListener(e -> {
+            centerCardLayout.show(centerCardPanel, "USERS");
+            // Refresh users when the users page is opened
+            initializeUserData();
+        });
         iconPanel.add(btnUsers);
 
         // Bottom panel for spacer
@@ -559,9 +669,9 @@ public class HavenDashboard extends JFrame {
     
     private JPanel createMapPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        panel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0)); // Remove padding
         
-        // Add map panel directly
+        // Add map panel directly without control panel
         panel.add(mapPanel, BorderLayout.CENTER);
         
         return panel;
@@ -651,37 +761,132 @@ public class HavenDashboard extends JFrame {
 
     // Users Panel implementation
     private JPanel createUsersPanel() {
+        System.out.println("Creating users panel with " + allUsers.size() + " users");
         JPanel panel = new RoundedPanel();
         panel.setBackground(Color.WHITE); // Light theme background
         panel.setLayout(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         
+        // Create a top panel for title and refresh button
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBackground(Color.WHITE);
+        topPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+        
         JLabel title = new JLabel("Users");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 20f));
         title.setForeground(Color.BLACK);
-        panel.add(title, BorderLayout.NORTH);
+        topPanel.add(title, BorderLayout.WEST);
+        
+        // Refresh button
+        JButton refreshButton = new JButton("Refresh");
+        refreshButton.addActionListener(e -> {
+            System.out.println("Refreshing users data...");
+            initializeUserData();
+        });
+        topPanel.add(refreshButton, BorderLayout.EAST);
+        
+        panel.add(topPanel, BorderLayout.NORTH);
         
         // Create tabs for different user views
-        JTabbedPane tabbedPane = new JTabbedPane();
+        usersTabbedPane = new JTabbedPane();
         
         // All Users tab
-        JPanel allUsersPanel = createUsersTablePanel(allUsers, "All Registered Users");
-        tabbedPane.addTab("All Users", allUsersPanel);
+        allUsersPanel = createUsersTablePanel(allUsers, "All Registered Users");
+        usersTabbedPane.addTab("All Users", allUsersPanel);
         
         // Online Users tab
-        JPanel onlineUsersPanel = createUsersTablePanel(onlineUsers, "Currently Online Users");
-        tabbedPane.addTab("Online Users", onlineUsersPanel);
+        onlineUsersPanel = createUsersTablePanel(onlineUsers, "Currently Online Users");
+        usersTabbedPane.addTab("Online Users", onlineUsersPanel);
         
-        panel.add(tabbedPane, BorderLayout.CENTER);
+        panel.add(usersTabbedPane, BorderLayout.CENTER);
         
+        System.out.println("Users panel created with " + allUsers.size() + " users");
         return panel;
     }
 
+    // Method to handle alert card clicks
     private void onAlertClicked(AlertPanel.AlertData data) {
+        // Store the currently selected emergency
+        currentlySelectedEmergency = data;
+        
+        // Remove the currently displayed route from the map
+        mapPanel.hideRoute();
+        
         // Center map on the alert location without adding a new marker
-        mapPanel.centerOn(data.lat, data.lng);
+        mapPanel.centerOn(data.getLat(), data.getLng());
         // Highlight existing marker if it exists
-        mapPanel.highlightMarker(data.lat, data.lng);
+        mapPanel.highlightMarker(data.getLat(), data.getLng());
+        
+        // Calculate and draw the new route to the newly selected alert location
+        drawRouteToEmergency(data.getLat(), data.getLng());
+    }
+    
+    // Method to handle alert deselection
+    private void onAlertDeselected() {
+        // Clear the currently selected emergency
+        currentlySelectedEmergency = null;
+        
+        // Hide the currently displayed route from the map
+        mapPanel.hideRoute();
+    }
+    
+    // Method to handle marker clicks on the map
+    private void onMarkerClicked(double lat, double lng, String emergencyId) {
+        // In a real implementation, we would find the corresponding alert data
+        // For now, we'll just center on the location and highlight the marker
+        mapPanel.centerOn(lat, lng);
+        mapPanel.highlightMarker(lat, lng);
+        
+        // If we have a currently selected emergency and it matches this marker, 
+        // we don't need to do anything else
+        if (currentlySelectedEmergency != null && 
+            Math.abs(currentlySelectedEmergency.getLat() - lat) < 0.0001 && 
+            Math.abs(currentlySelectedEmergency.getLng() - lng) < 0.0001) {
+            return;
+        }
+        
+        // Otherwise, we need to find the corresponding alert data
+        // This would require maintaining a mapping between markers and alert data
+        // For now, we'll just hide the current route
+        mapPanel.hideRoute();
+    }
+    
+    // Method to calculate and draw route from vet hub to emergency location
+    private void drawRouteToEmergency(double emergencyLat, double emergencyLng) {
+        // Run in a separate thread to avoid blocking the UI
+        new Thread(() -> {
+            try {
+                OpenRouteService ors = OpenRouteService.getInstance();
+                System.out.println("Calculating route from vet hub to emergency location: " + emergencyLat + ", " + emergencyLng);
+                double[][] routeCoordinates = ors.calculateShortestPath(emergencyLat, emergencyLng);
+                
+                if (routeCoordinates != null) {
+                    System.out.println("Route calculation successful, drawing route with " + routeCoordinates.length + " points");
+                    // Update UI on EDT
+                    SwingUtilities.invokeLater(() -> {
+                        // The drawRoute method in MapPanel already handles removing the existing route
+                        mapPanel.drawRoute(routeCoordinates);
+                    });
+                } else {
+                    System.err.println("Failed to calculate route - routeCoordinates is null");
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, 
+                            "Failed to calculate route to emergency location.", 
+                            "Route Calculation Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            } catch (Exception e) {
+                System.err.println("Error calculating route: " + e.getMessage());
+                e.printStackTrace();
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this, 
+                        "Error calculating route: " + e.getMessage(), 
+                        "Route Calculation Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        }).start();
     }
 
     private void simulateAddAlert() {
@@ -692,7 +897,14 @@ public class HavenDashboard extends JFrame {
         double lng = 122.9509 + Math.random() * 0.02 - 0.01;
         String id = "ALRT-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         String title = "Pet Emergency " + markerCounter.incrementAndGet();
-        alertPanel.addAlert(new AlertPanel.AlertData(title, "Location sample", "Owner", id, lat, lng));
+        // This method was creating fake alerts
+        // Commenting out to prevent random alerts from appearing
+        /*
+        double lat = 10.6765 + Math.random() * 0.02 - 0.01;
+        double lng = 122.9509 + Math.random() * 0.02 - 0.01;
+        String id = "ALRT-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        String title = "Pet Emergency " + markerCounter.incrementAndGet();
+        alertPanel.addAlert(new AlertPanel.AlertData.Builder(title, "Location sample", "Owner", id, lat, lng).build());
         mapPanel.addMarker(lat, lng, title, false);
         */
     }
@@ -865,8 +1077,54 @@ public class HavenDashboard extends JFrame {
     }
     
     private void refreshUsersPanel() {
-        // This is a placeholder method for refreshing the users panel
-        // In a real implementation, you would properly refresh the users panel
+        // Update the users panel with the latest data
         System.out.println("Users panel refreshed with " + allUsers.size() + " users");
+        
+        if (usersTabbedPane != null) {
+            System.out.println("Updating users tabbed pane with new data");
+            // Remove existing tabs
+            usersTabbedPane.removeAll();
+            
+            // Recreate tabs with updated data
+            allUsersPanel = createUsersTablePanel(allUsers, "All Registered Users (" + allUsers.size() + " users)");
+            usersTabbedPane.addTab("All Users", allUsersPanel);
+            
+            onlineUsersPanel = createUsersTablePanel(onlineUsers, "Currently Online Users (" + onlineUsers.size() + " users)");
+            usersTabbedPane.addTab("Online Users", onlineUsersPanel);
+            
+            // Revalidate and repaint to ensure UI updates
+            usersTabbedPane.revalidate();
+            usersTabbedPane.repaint();
+            System.out.println("Users tabbed pane updated successfully");
+        } else {
+            System.out.println("Users tabbed pane is null, cannot update");
+        }
+    }
+    
+    // Method to handle alert removal
+    private void onAlertRemoved(AlertPanel.AlertData alert) {
+        System.out.println("onAlertRemoved called for alert ID: " + alert.getId());
+        // Remove the corresponding marker from the map
+        mapPanel.removeMarker(alert.getId());
+        
+        // If this was the currently selected emergency, clear the selection
+        if (currentlySelectedEmergency != null && currentlySelectedEmergency.getId().equals(alert.getId())) {
+            currentlySelectedEmergency = null;
+            mapPanel.hideRoute();
+        }
+        
+        // Update analytics
+        updateAnalyticsForEmergency("RESOLVED", "RESPONDED");
+        System.out.println("Finished processing alert removal for ID: " + alert.getId());
+    }
+
+    // Implement the AlertResponseListener interface
+    @Override
+    public void onAlertResponded(AlertPanel.AlertData alert) {
+        // Update the alert status to RESOLVED
+        updateAnalyticsForEmergency("RESOLVED", "RESPONDED");
+        
+        // Show a notification
+        showDesktopNotification("Alert Responded", "Emergency alert " + alert.getId() + " has been marked as responded.");
     }
 }

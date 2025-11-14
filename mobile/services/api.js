@@ -139,6 +139,9 @@ export const emergenciesAPI = {
   createEmergencyReport: (emergencyData) => apiClient.post('/api/v1/emergencies/alert', emergencyData),
   getActiveEmergencies: () => apiClient.get('/api/v1/emergencies/active'),
   updateEmergencyStatus: (emergencyId, status) => apiClient.put(`/api/v1/emergencies/${emergencyId}`, { status }),
+  // Add route calculation method
+  calculateRoute: (startLat, startLng, endLat, endLng) => 
+    apiClient.post('/api/v1/routes/shortest-path', { startLat, startLng, endLat, endLng })
 };
 
 // WebSocket service

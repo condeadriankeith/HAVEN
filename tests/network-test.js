@@ -5,7 +5,7 @@ async function testNetworkConnectivity() {
   
   const testCases = [
     { name: 'Localhost', url: 'http://localhost:3000/api/v1/auth/login' },
-    { name: 'Local IP', url: 'http://192.168.254.102:3000/api/v1/auth/login' },
+    { name: 'Local IP', url: 'http://172.20.10.3:3000/api/v1/auth/login' },
     { name: '127.0.0.1', url: 'http://127.0.0.1:3000/api/v1/auth/login' }
   ];
   

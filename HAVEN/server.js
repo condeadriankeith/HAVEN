@@ -849,6 +849,112 @@ app.get('/api/v1/emergencies/statistics', authenticateToken, async (req, res) =>
   }
 });
 
+// Add this after the other imports
+const https = require('https');
+
+// Add OpenRouteService API key from environment variables
+const OPENROUTESERVICE_API_KEY = process.env.OPENROUTESERVICE_API_KEY || "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjhlMGM5ZWEyNzdmNTRmMWZhN2I2ODk3YmQ3MGZjOTEyIiwiaCI6Im11cm11cjY0In0="; // Default API key
+const DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/driving-car";
+
+// Route to calculate shortest path using OpenRouteService
+app.post('/api/v1/routes/shortest-path', async (req, res) => {
+  try {
+    const { startLat, startLng, endLat, endLng } = req.body;
+    
+    // Validate coordinates
+    if (startLat === undefined || startLng === undefined || endLat === undefined || endLng === undefined) {
+      return res.status(400).json({ error: 'Missing required coordinates' });
+    }
+    
+    // Validate coordinate ranges
+    if (startLat < -90 || startLat > 90 || endLat < -90 || endLat > 90 ||
+        startLng < -180 || startLng > 180 || endLng < -180 || endLng > 180) {
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    }
+    
+    // Create the request body for OpenRouteService
+    const requestBody = {
+      coordinates: [
+        [startLng, startLat], // longitude first for OpenRouteService
+        [endLng, endLat]      // longitude first for OpenRouteService
+      ],
+      geometry: true,
+      instructions: false,
+      units: "km"
+    };
+    
+    // Convert to JSON string
+    const requestBodyString = JSON.stringify(requestBody);
+    
+    // Set up the request options
+    const options = {
+      method: 'POST',
+      headers: {
+        'Authorization': OPENROUTESERVICE_API_KEY,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(requestBodyString)
+      }
+    };
+    
+    // Make the request to OpenRouteService
+    const request = https.request(DIRECTIONS_URL, options, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        if (response.statusCode === 200) {
+          try {
+            const jsonResponse = JSON.parse(data);
+            
+            // Extract routes from the response
+            if (jsonResponse.routes && jsonResponse.routes.length > 0) {
+              const route = jsonResponse.routes[0];
+              
+              // Extract geometry (encoded polyline)
+              if (route.geometry) {
+                // Return the encoded polyline - the mobile app will decode it
+                res.json({
+                  success: true,
+                  route: route.geometry,
+                  distance: route.summary?.distance,
+                  duration: route.summary?.duration
+                });
+              } else {
+                res.status(500).json({ error: 'No geometry found in the route' });
+              }
+            } else {
+              res.status(500).json({ error: 'No routes found in the response' });
+            }
+          } catch (parseError) {
+            console.error('Error parsing OpenRouteService response:', parseError);
+            res.status(500).json({ error: 'Error parsing route data' });
+          }
+        } else {
+          console.error('OpenRouteService request failed with status:', response.statusCode);
+          console.error('Response body:', data);
+          res.status(response.statusCode).json({ error: 'Route calculation failed' });
+        }
+      });
+    });
+    
+    request.on('error', (error) => {
+      console.error('Error making request to OpenRouteService:', error);
+      res.status(500).json({ error: 'Error calculating route' });
+    });
+    
+    // Write the request body
+    request.write(requestBodyString);
+    request.end();
+    
+  } catch (error) {
+    console.error('Error calculating shortest path:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Function to start server with port fallback
 function startServer(server, port, retries = 5) {
   // Bind to all network interfaces to accept connections from other devices

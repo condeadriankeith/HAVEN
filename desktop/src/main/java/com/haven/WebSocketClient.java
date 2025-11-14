@@ -8,14 +8,44 @@ import org.glassfish.tyrus.client.ClientManager;
 import javax.websocket.*;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @ClientEndpoint
 public class WebSocketClient {
-    private static final String WEBSOCKET_URL = "ws://localhost:3000";
+    private static final String WEBSOCKET_URL = getWebSocketUrl();
+        
+        private static String getWebSocketUrl() {
+            String backendUrl = System.getenv("HAVEN_BACKEND_URL");
+            System.out.println("HAVEN_BACKEND_URL environment variable: '" + backendUrl + "'");
+            
+            if (backendUrl == null || backendUrl.trim().isEmpty()) {
+                System.out.println("Using default backend URL: http://localhost:3000");
+                backendUrl = "http://localhost:3000";
+            } else {
+                // Trim whitespace and any potential invisible characters
+                backendUrl = backendUrl.trim();
+                System.out.println("Using backend URL from environment: '" + backendUrl + "'");
+            }
+            
+            // Convert HTTP URL to WebSocket URL
+            String wsUrl;
+            if (backendUrl.startsWith("https://")) {
+                wsUrl = "wss://" + backendUrl.substring(8);
+            } else if (backendUrl.startsWith("http://")) {
+                wsUrl = "ws://" + backendUrl.substring(7);
+            } else {
+                wsUrl = backendUrl;
+            }
+            
+            System.out.println("Constructed WebSocket URL: '" + wsUrl + "'");
+            return wsUrl;
+        }
     private Session userSession = null;
     private Gson gson = new Gson();
     private CountDownLatch latch = new CountDownLatch(1);
@@ -25,8 +55,25 @@ public class WebSocketClient {
     private boolean isConnected = false;
     private boolean subscribedToAlerts = false;
     private String authToken;
+    
+    // Message handler map
+    private Map<String, MessageHandler> messageHandlers;
 
     public WebSocketClient() {
+        initializeMessageHandlers();
+    }
+    
+    private void initializeMessageHandlers() {
+        messageHandlers = new HashMap<>();
+        messageHandlers.put("authenticated", new AuthenticatedHandler(this));
+        messageHandlers.put("emergency_update", new EmergencyUpdateHandler(this));
+        messageHandlers.put("new-emergency-alert", new NewEmergencyAlertHandler(this));
+        messageHandlers.put("emergency-status-changed", new EmergencyStatusChangedHandler(this));
+        messageHandlers.put("current-emergencies", new CurrentEmergenciesHandler(this));
+        messageHandlers.put("subscription-ack", new SubscriptionAckHandler(this));
+        messageHandlers.put("status-update-ack", new StatusUpdateAckHandler(this));
+        messageHandlers.put("emergency-ack", new EmergencyAckHandler(this));
+        messageHandlers.put("error", new ErrorHandler(this));
     }
 
     public void setEmergencyUpdateListener(EmergencyUpdateListener listener) {
@@ -41,13 +88,26 @@ public class WebSocketClient {
         this.authToken = token;
         ClientManager client = ClientManager.createClient();
         
+        // Log the WebSocket URL being used
+        System.out.println("Attempting to connect to WebSocket URL: '" + WEBSOCKET_URL + "'");
+        
+        // Validate the URI before attempting connection
+        URI uri;
+        try {
+            uri = new URI(WEBSOCKET_URL);
+            System.out.println("URI successfully parsed: " + uri.toString());
+        } catch (URISyntaxException e) {
+            System.err.println("Invalid URI format: " + WEBSOCKET_URL);
+            throw new Exception("Invalid WebSocket URI format: " + e.getMessage(), e);
+        }
+        
         // Retry connection up to 3 times
         int attempts = 0;
         Exception lastException = null;
         
         while (attempts < 3) {
             try {
-                client.connectToServer(this, new URI(WEBSOCKET_URL));
+                client.connectToServer(this, uri);
                 
                 // Wait for connection to be established with timeout
                 if (!latch.await(10, TimeUnit.SECONDS)) {
@@ -133,44 +193,13 @@ public class WebSocketClient {
 
             System.out.println("Processing message type: " + type);
 
-            switch (type) {
-                case "authenticated":
-                    System.out.println("WebSocket authenticated successfully");
-                    subscribeToEmergencyAlerts();
-                    break;
-                case "emergency_update":
-                    handleEmergencyUpdate(data);
-                    break;
-                case "new-emergency-alert":
-                    handleNewEmergencyAlert(data);
-                    break;
-                case "emergency-status-changed":
-                    handleEmergencyStatusChanged(data);
-                    break;
-                case "current-emergencies":
-                    handleCurrentEmergencies(data);
-                    break;
-                case "subscription-ack":
-                    System.out.println("Subscribed to emergency alerts successfully");
-                    // Set a flag to indicate that we're subscribed
-                    this.subscribedToAlerts = true;
-                    break;
-                case "status-update-ack":
-                    System.out.println("Emergency status update acknowledged");
-                    break;
-                case "emergency-ack":
-                    System.out.println("Emergency alert acknowledged by server");
-                    break;
-                case "error":
-                    String errorMessage = data.has("message") ? data.get("message").getAsString() : "Unknown error";
-                    System.err.println("WebSocket error: " + errorMessage);
-                    if (connectionListener != null) {
-                        connectionListener.onError(errorMessage);
-                    }
-                    break;
-                default:
-                    System.out.println("Unknown message type: " + type);
-                    System.out.println("Message content: " + message);
+            // Use polymorphic dispatch instead of switch statement
+            MessageHandler handler = messageHandlers.get(type);
+            if (handler != null) {
+                handler.handle(data);
+            } else {
+                System.out.println("Unknown message type: " + type);
+                System.out.println("Message content: " + message);
             }
         } catch (Exception e) {
             System.err.println("Error processing WebSocket message: " + e.getMessage());
@@ -316,5 +345,169 @@ public class WebSocketClient {
         void onConnected();
         void onDisconnected();
         void onError(String errorMessage);
+    }
+    
+    // Abstract base class for message handlers
+    abstract class MessageHandler {
+        protected WebSocketClient client;
+        
+        public MessageHandler(WebSocketClient client) {
+            this.client = client;
+        }
+        
+        public abstract void handle(JsonObject data);
+        public abstract String getMessageType();
+    }
+    
+    // Concrete implementations
+    class AuthenticatedHandler extends MessageHandler {
+        public AuthenticatedHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            System.out.println("WebSocket authenticated successfully");
+            client.subscribeToEmergencyAlerts();
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "authenticated";
+        }
+    }
+    
+    class EmergencyUpdateHandler extends MessageHandler {
+        public EmergencyUpdateHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            client.handleEmergencyUpdate(data);
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "emergency_update";
+        }
+    }
+    
+    class NewEmergencyAlertHandler extends MessageHandler {
+        public NewEmergencyAlertHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            client.handleNewEmergencyAlert(data);
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "new-emergency-alert";
+        }
+    }
+    
+    class EmergencyStatusChangedHandler extends MessageHandler {
+        public EmergencyStatusChangedHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            client.handleEmergencyStatusChanged(data);
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "emergency-status-changed";
+        }
+    }
+    
+    class CurrentEmergenciesHandler extends MessageHandler {
+        public CurrentEmergenciesHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            client.handleCurrentEmergencies(data);
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "current-emergencies";
+        }
+    }
+    
+    class SubscriptionAckHandler extends MessageHandler {
+        public SubscriptionAckHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            System.out.println("Subscribed to emergency alerts successfully");
+            // Set a flag to indicate that we're subscribed
+            client.subscribedToAlerts = true;
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "subscription-ack";
+        }
+    }
+    
+    class StatusUpdateAckHandler extends MessageHandler {
+        public StatusUpdateAckHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            System.out.println("Emergency status update acknowledged");
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "status-update-ack";
+        }
+    }
+    
+    class EmergencyAckHandler extends MessageHandler {
+        public EmergencyAckHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            System.out.println("Emergency alert acknowledged by server");
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "emergency-ack";
+        }
+    }
+    
+    class ErrorHandler extends MessageHandler {
+        public ErrorHandler(WebSocketClient client) {
+            super(client);
+        }
+        
+        @Override
+        public void handle(JsonObject data) {
+            String errorMessage = data.has("message") ? data.get("message").getAsString() : "Unknown error";
+            System.err.println("WebSocket error: " + errorMessage);
+            if (client.connectionListener != null) {
+                client.connectionListener.onError(errorMessage);
+            }
+        }
+        
+        @Override
+        public String getMessageType() {
+            return "error";
+        }
     }
 }

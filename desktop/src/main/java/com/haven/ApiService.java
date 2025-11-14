@@ -4,7 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.stream.JsonReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -13,13 +15,17 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ApiService {
+public class ApiService implements com.haven.services.AuthService, com.haven.services.UserService, com.haven.services.EmergencyService {
     private static final String BASE_URL = (System.getenv("HAVEN_BACKEND_URL") != null ? System.getenv("HAVEN_BACKEND_URL").trim() : "http://localhost:3000").trim();
     private static ApiService instance;
     private HttpClient client;
     private Gson gson;
     private String authToken;
     private WebSocketClient webSocketClient;
+    
+    public String getBaseUrl() {
+        return BASE_URL;
+    }
 
     private ApiService() {
         this.client = HttpClient.newBuilder()
@@ -83,6 +89,16 @@ public class ApiService {
         try {
             // If the response is not JSON, it might be an error message
             if (response.statusCode() != 200) {
+                System.err.println("Login failed with status code: " + response.statusCode());
+                // For debugging, let's still try to parse the response
+                if (response.body() != null && !response.body().trim().isEmpty()) {
+                    try {
+                        JsonObject errorResponse = JsonParser.parseString(response.body()).getAsJsonObject();
+                        System.err.println("Login error response: " + errorResponse.toString());
+                    } catch (JsonSyntaxException e) {
+                        System.err.println("Login error response is not JSON: " + response.body());
+                    }
+                }
                 throw new IOException("HTTP " + response.statusCode() + ": " + response.body());
             }
             
@@ -91,6 +107,7 @@ public class ApiService {
             // Connect WebSocket after successful login
             if (response.statusCode() == 200 && jsonResponse.has("token")) {
                 String token = jsonResponse.get("token").getAsString();
+                System.out.println("Setting auth token: " + token);
                 setAuthToken(token);
                 try {
                     if (webSocketClient != null) {
@@ -99,6 +116,8 @@ public class ApiService {
                 } catch (Exception e) {
                     System.err.println("Failed to connect WebSocket: " + e.getMessage());
                 }
+            } else {
+                System.err.println("Login response does not contain token: " + jsonResponse.toString());
             }
 
             return jsonResponse;
@@ -130,11 +149,21 @@ public class ApiService {
         System.out.println("Register API response status: " + response.statusCode());
         System.out.println("Register API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from register API");
+            throw new IOException("Empty response from register API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from register API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from register API: " + responseBody);
+            throw new IOException("Invalid JSON response from register API: " + responseBody, e);
         }
     }
 
@@ -151,32 +180,98 @@ public class ApiService {
         System.out.println("User profile API response status: " + response.statusCode());
         System.out.println("User profile API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from user profile API");
+            throw new IOException("Empty response from user profile API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from user profile API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from user profile API: " + responseBody);
+            throw new IOException("Invalid JSON response from user profile API: " + responseBody, e);
         }
     }
 
     // Get all users (admin only)
     public JsonObject getAllUsers() throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder()
+        System.out.println("Making request to get all users with auth token: " + authToken);
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(BASE_URL + "/api/v1/users"))
                 .header("Content-Type", "application/json")
-                .GET()
-                .build();
+                .GET();
+                
+        // Add authentication header if token is available
+        if (authToken != null && !authToken.isEmpty()) {
+            requestBuilder.header("Authorization", "Bearer " + authToken);
+            System.out.println("Adding authorization header with token: " + authToken);
+        } else {
+            System.out.println("No auth token available for users request");
+        }
+
+        HttpRequest request = requestBuilder.build();
+        
+        System.out.println("Sending request to: " + request.uri());
+        System.out.println("Request headers: " + request.headers().map());
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         
         System.out.println("Get all users API response status: " + response.statusCode());
         System.out.println("Get all users API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from get all users API");
+            return new JsonObject();
+        }
+        
+        // Check if we got an authentication error
+        if (response.statusCode() == 401) {
+            System.err.println("Authentication required for users API");
+            // Try to parse the error response for more details
+            try {
+                JsonObject errorResponse = JsonParser.parseString(responseBody).getAsJsonObject();
+                System.err.println("401 Error details: " + errorResponse.toString());
+            } catch (JsonSyntaxException e) {
+                System.err.println("401 Error response is not JSON: " + responseBody);
+            }
+            return new JsonObject();
+        }
+        
+        if (response.statusCode() == 403) {
+            System.err.println("Access denied - admin privileges required for users API");
+            // Try to parse the error response for more details
+            try {
+                JsonObject errorResponse = JsonParser.parseString(responseBody).getAsJsonObject();
+                System.err.println("403 Error details: " + errorResponse.toString());
+            } catch (JsonSyntaxException e) {
+                System.err.println("403 Error response is not JSON: " + responseBody);
+            }
+            return new JsonObject();
+        }
+        
+        // Check if the response contains an error message instead of JSON
+        if (responseBody.contains("Invalid Upgrade header") || responseBody.contains("Upgrade Required")) {
+            System.err.println("Server returned WebSocket upgrade error instead of JSON data");
+            // Return an empty JSON object to avoid parsing errors
+            return new JsonObject();
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from get all users API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from get all users API: " + responseBody);
+            // Return an empty JSON object to avoid breaking the application
+            return new JsonObject();
         }
     }
 
@@ -201,11 +296,21 @@ public class ApiService {
         System.out.println("Create emergency alert API response status: " + response.statusCode());
         System.out.println("Create emergency alert API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from emergency alert API");
+            throw new IOException("Empty response from emergency alert API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from emergency alert API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from emergency alert API: " + responseBody);
+            throw new IOException("Invalid JSON response from emergency alert API: " + responseBody, e);
         }
     }
 
@@ -230,11 +335,21 @@ public class ApiService {
         System.out.println("Create emergency report API response status: " + response.statusCode());
         System.out.println("Create emergency report API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from emergency report API");
+            throw new IOException("Empty response from emergency report API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from emergency report API: " + response.body());
-            throw new IOException("Invalid JSON response from emergency report API: " + response.body(), e);
+            System.err.println("Invalid JSON response from emergency report API: " + responseBody);
+            throw new IOException("Invalid JSON response from emergency report API: " + responseBody, e);
         }
     }
 
@@ -250,11 +365,21 @@ public class ApiService {
         System.out.println("Get active emergencies API response status: " + response.statusCode());
         System.out.println("Get active emergencies API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from active emergencies API");
+            throw new IOException("Empty response from active emergencies API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from active emergencies API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from active emergencies API: " + responseBody);
+            throw new IOException("Invalid JSON response from active emergencies API: " + responseBody, e);
         }
     }
     
@@ -275,11 +400,21 @@ public class ApiService {
         System.out.println("Update emergency status API response status: " + response.statusCode());
         System.out.println("Update emergency status API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from update emergency status API");
+            throw new IOException("Empty response from update emergency status API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from update emergency status API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from update emergency status API: " + responseBody);
+            throw new IOException("Invalid JSON response from update emergency status API: " + responseBody, e);
         }
     }
     
@@ -296,11 +431,42 @@ public class ApiService {
         System.out.println("Get emergency statistics API response status: " + response.statusCode());
         System.out.println("Get emergency statistics API response body: " + response.body());
         
+        // Check if the response is valid JSON
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            System.err.println("Empty response from get emergency statistics API");
+            throw new IOException("Empty response from get emergency statistics API");
+        }
+        
         try {
-            return JsonParser.parseString(response.body()).getAsJsonObject();
+            // Use a lenient JSON parser to handle malformed JSON
+            JsonReader reader = new JsonReader(new StringReader(responseBody));
+            reader.setLenient(true);
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (JsonSyntaxException e) {
-            System.err.println("Invalid JSON response from get emergency statistics API: " + response.body());
-            throw e;
+            System.err.println("Invalid JSON response from get emergency statistics API: " + responseBody);
+            throw new IOException("Invalid JSON response from get emergency statistics API: " + responseBody, e);
+        }
+    }
+    
+    // Test backend connection
+    public boolean testConnection() {
+        try {
+            System.out.println("Testing connection to backend at: " + BASE_URL);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(BASE_URL + "/api/v1/auth/login"))
+                    .GET()
+                    .timeout(Duration.ofSeconds(5))
+                    .build();
+            
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Connection test response status: " + response.statusCode());
+            // For login endpoint, we expect 405 (Method Not Allowed) which means the server is running
+            return response.statusCode() == 405 || response.statusCode() == 200;
+        } catch (Exception e) {
+            System.err.println("Connection test failed: " + e.getMessage());
+            e.printStackTrace();
+            return false;
         }
     }
 }

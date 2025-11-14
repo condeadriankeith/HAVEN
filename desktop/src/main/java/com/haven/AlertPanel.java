@@ -10,13 +10,30 @@ public class AlertPanel extends JPanel {
     private final JPanel alertListPanel;
     private final List<AlertData> alerts = new ArrayList<>();
     private final Consumer<AlertData> alertClickListener;
+    private final Runnable alertDeselectListener; // Listener for alert deselection
+    private AlertData selectedAlert = null; // Track the currently selected alert
+    private JPanel selectedCard = null; // Track the currently selected card UI
     // Keep track of expanded state for each alert card
     private final List<Boolean> expandedStates = new ArrayList<>();
-
-    // Updated constructor to remove the unused addAlertListener parameter
+    
+    // Add a listener for alert removal
+    private Consumer<AlertData> alertRemoveListener;
+    
+    // Constructor for backward compatibility
     public AlertPanel(Consumer<AlertData> alertClickListener) {
+        this(alertClickListener, () -> {}); // Default no-op deselect listener
+    }
+    
+    // Updated constructor to support alert removal
+    public AlertPanel(Consumer<AlertData> alertClickListener, Runnable alertDeselectListener) {
+        this(alertClickListener, alertDeselectListener, null);
+    }
+    
+    // New constructor with alert remove listener
+    public AlertPanel(Consumer<AlertData> alertClickListener, Runnable alertDeselectListener, Consumer<AlertData> alertRemoveListener) {
         this.alertClickListener = alertClickListener;
-        // this.addAlertListener = addAlertListener; // Removed
+        this.alertDeselectListener = alertDeselectListener;
+        this.alertRemoveListener = alertRemoveListener;
         
         setPreferredSize(new Dimension(320, 0)); // Slightly wider
         setBackground(Color.WHITE); // Light theme background
@@ -34,13 +51,6 @@ public class AlertPanel extends JPanel {
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f)); // Larger font
         title.setForeground(new Color(255, 59, 48)); // HAVEN Red
         header.add(title, BorderLayout.WEST);
-        
-        // Removed the add (+) button as it's no longer needed
-        // CustomButton addAlertBtn = new CustomButton("+");
-        // addAlertBtn.setPreferredSize(new Dimension(40, 40));
-        // addAlertBtn.setFont(addAlertBtn.getFont().deriveFont(20f));
-        // addAlertBtn.addActionListener(e -> addAlertListener.run());
-        // header.add(addAlertBtn, BorderLayout.EAST);
         
         add(header, BorderLayout.NORTH);
         
@@ -74,6 +84,14 @@ public class AlertPanel extends JPanel {
         alertListPanel.repaint();
     }
     
+    public void clearAllAlerts() {
+        alerts.clear();
+        expandedStates.clear();
+        alertListPanel.removeAll();
+        alertListPanel.revalidate();
+        alertListPanel.repaint();
+    }
+    
     private JPanel createAlertCard(AlertData alert, int index) {
         // Create alert card
         JPanel card = new RoundedPanel();
@@ -88,7 +106,7 @@ public class AlertPanel extends JPanel {
         left.setLayout(new BoxLayout(left, BoxLayout.Y_AXIS));
         left.setOpaque(false);
         
-        JLabel titleLabel = new JLabel(alert.title);
+        JLabel titleLabel = new JLabel(alert.getTitle());
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 15f)); // Larger title
         titleLabel.setForeground(Color.BLACK);
         
@@ -97,23 +115,23 @@ public class AlertPanel extends JPanel {
         descLabel.setForeground(Color.DARK_GRAY);
         descLabel.setVerticalAlignment(SwingConstants.TOP);
         
-        JLabel ownerLabel = new JLabel("Reported by: " + alert.owner);
+        JLabel ownerLabel = new JLabel("Reported by: " + alert.getOwner());
         ownerLabel.setFont(ownerLabel.getFont().deriveFont(12f));
         ownerLabel.setForeground(Color.GRAY);
         
         // Add contact information if available
         JLabel contactLabel = new JLabel();
-        if (alert.contactInfo != null && !alert.contactInfo.isEmpty()) {
-            contactLabel.setText("Contact: " + alert.contactInfo);
+        if (alert.getContactInfo() != null && !alert.getContactInfo().isEmpty()) {
+            contactLabel.setText("Contact: " + alert.getContactInfo());
             contactLabel.setFont(contactLabel.getFont().deriveFont(12f));
             contactLabel.setForeground(Color.GRAY);
         }
         
         // Add pet information if available
         JLabel petsLabel = new JLabel();
-        System.out.println("Debug: alert.pets = " + alert.pets); // Debug line
-        if (alert.pets != null && !alert.pets.equals("[]") && !alert.pets.isEmpty()) {
-            String petsText = formatPetsForAlert(alert.pets);
+        System.out.println("Debug: alert.pets = " + alert.getPets()); // Debug line
+        if (alert.getPets() != null && !alert.getPets().equals("[]") && !alert.getPets().isEmpty()) {
+            String petsText = formatPetsForAlert(alert.getPets());
             System.out.println("Debug: petsText = " + petsText); // Debug line
             if (!petsText.isEmpty()) {
                 petsLabel.setText("Pets: " + petsText);
@@ -123,13 +141,21 @@ public class AlertPanel extends JPanel {
         }
         
         // Add ID and status information
-        JLabel idLabel = new JLabel("ID: " + alert.id);
+        JLabel idLabel = new JLabel("ID: " + alert.getId());
         idLabel.setFont(idLabel.getFont().deriveFont(12f));
         idLabel.setForeground(new Color(255, 59, 48)); // HAVEN Red
         
-        JLabel coordinatesLabel = new JLabel("Location: " + String.format("%.4f, %.4f", alert.lat, alert.lng));
+        JLabel coordinatesLabel = new JLabel("Location: " + String.format("%.4f, %.4f", alert.getLat(), alert.getLng()));
         coordinatesLabel.setFont(coordinatesLabel.getFont().deriveFont(12f));
         coordinatesLabel.setForeground(Color.GRAY);
+        
+        // Add emergency fee information if available
+        JLabel feeLabel = new JLabel();
+        if (alert.getEmergencyFee() > 0) {
+            feeLabel.setText("Emergency Fee: ₱" + alert.getEmergencyFee());
+            feeLabel.setFont(feeLabel.getFont().deriveFont(Font.BOLD, 12f));
+            feeLabel.setForeground(new Color(46, 204, 113)); // Green color for fee
+        }
         
         left.add(titleLabel);
         left.add(Box.createVerticalStrut(5));
@@ -149,8 +175,12 @@ public class AlertPanel extends JPanel {
         left.add(idLabel);
         left.add(Box.createVerticalStrut(4));
         left.add(coordinatesLabel);
+        if (alert.getEmergencyFee() > 0) {
+            left.add(Box.createVerticalStrut(4));
+            left.add(feeLabel);
+        }
         
-        // Right side - Expand/Collapse button
+        // Right side - Expand/Collapse button and Responded button
         JPanel right = new JPanel();
         right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
         right.setOpaque(false);
@@ -162,7 +192,17 @@ public class AlertPanel extends JPanel {
         expandButton.setFont(expandButton.getFont().deriveFont(12f));
         expandButton.addActionListener(e -> toggleAlertCard(index));
         
+        // Create responded button
+        CustomButton respondedButton = new CustomButton("Mark Responded");
+        respondedButton.setPreferredSize(new Dimension(120, 30));
+        respondedButton.setFont(respondedButton.getFont().deriveFont(10f));
+        respondedButton.setBackground(new Color(46, 204, 113)); // Green color
+        respondedButton.setForeground(Color.WHITE);
+        respondedButton.addActionListener(e -> markAlertAsResponded(alert, index));
+        
         right.add(expandButton);
+        right.add(Box.createVerticalStrut(8));
+        right.add(respondedButton);
         right.add(Box.createVerticalGlue());
         
         card.add(left, BorderLayout.CENTER);
@@ -172,7 +212,26 @@ public class AlertPanel extends JPanel {
         card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         card.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                alertClickListener.accept(alert);
+                // If this alert is already selected, deselect it
+                if (selectedAlert != null && selectedAlert.getId().equals(alert.getId())) {
+                    // Deselect the alert
+                    selectedAlert = null;
+                    if (selectedCard != null) {
+                        selectedCard.setBackground(new Color(245, 245, 245)); // Reset to normal color
+                    }
+                    selectedCard = null;
+                    // Notify the dashboard that the alert was deselected
+                    alertDeselectListener.run();
+                } else {
+                    // Select this alert
+                    if (selectedCard != null) {
+                        selectedCard.setBackground(new Color(245, 245, 245)); // Reset previous selection
+                    }
+                    card.setBackground(new Color(220, 220, 220)); // Highlight selected card
+                    selectedAlert = alert;
+                    selectedCard = card;
+                    alertClickListener.accept(alert);
+                }
             }
         });
         
@@ -199,10 +258,10 @@ public class AlertPanel extends JPanel {
     
     private String getDisplayDescription(AlertData alert, int index) {
         // Show full description when expanded, truncated when collapsed
-        if (expandedStates.get(index) || alert.description.length() <= 100) {
-            return alert.description;
+        if (expandedStates.get(index) || alert.getDescription().length() <= 100) {
+            return alert.getDescription();
         } else {
-            return alert.description.substring(0, Math.min(100, alert.description.length())) + "...";
+            return alert.getDescription().substring(0, Math.min(100, alert.getDescription().length())) + "...";
         }
     }
     
@@ -256,40 +315,134 @@ public class AlertPanel extends JPanel {
         }
     }
     
+    // Method to mark an alert as responded
+    private void markAlertAsResponded(AlertData alert, int index) {
+        // Notify the dashboard that this alert has been responded to
+        if (alertClickListener instanceof AlertResponseListener) {
+            ((AlertResponseListener) alertClickListener).onAlertResponded(alert);
+        }
+        
+        // Notify the remove listener if set
+        if (alertRemoveListener != null) {
+            alertRemoveListener.accept(alert);
+        }
+        
+        // Remove the alert from the panel
+        removeAlert(alert.getId());
+        
+        // Show success message
+        JOptionPane.showMessageDialog(this, "Alert marked as responded and removed", "Success", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    // Method to set the alert remove listener
+    public void setAlertRemoveListener(Consumer<AlertData> listener) {
+        this.alertRemoveListener = listener;
+    }
+    
+    // Method to remove an alert by ID
+    public void removeAlert(String alertId) {
+        for (int i = 0; i < alerts.size(); i++) {
+            if (alerts.get(i).getId().equals(alertId)) {
+                // Remove from data structures
+                alerts.remove(i);
+                expandedStates.remove(i);
+                
+                // Remove from UI
+                alertListPanel.remove(i);
+                alertListPanel.revalidate();
+                alertListPanel.repaint();
+                break;
+            }
+        }
+    }
+    
+    // Interface for alert response listener
+    public interface AlertResponseListener {
+        void onAlertResponded(AlertData alert);
+    }
+    
     public static class AlertData {
-        public final String title;
-        public final String description;
-        public final String owner;
-        public final String id;
-        public final double lat;
-        public final double lng;
-        public final String pets; // Added pets field
-        public final String contactInfo; // Added contact information field
+        private final String title;
+        private final String description;
+        private final String owner;
+        private final String id;
+        private final double lat;
+        private final double lng;
+        private final String pets; // Added pets field
+        private final String contactInfo; // Added contact information field
+        private final int emergencyFee; // Added emergency fee field
         
-        public AlertData(String title, String description, String owner, String id, double lat, double lng, String pets, String contactInfo) {
-            this.title = title;
-            this.description = description;
-            this.owner = owner;
-            this.id = id;
-            this.lat = lat;
-            this.lng = lng;
-            this.pets = pets != null ? pets : "[]";
-            this.contactInfo = contactInfo != null ? contactInfo : "";
+        // Private constructor used by Builder
+        private AlertData(Builder builder) {
+            this.title = builder.title;
+            this.description = builder.description;
+            this.owner = builder.owner;
+            this.id = builder.id;
+            this.lat = builder.lat;
+            this.lng = builder.lng;
+            this.pets = builder.pets != null ? builder.pets : "[]";
+            this.contactInfo = builder.contactInfo != null ? builder.contactInfo : "";
+            this.emergencyFee = builder.emergencyFee;
         }
         
-        // Constructor for backward compatibility
-        public AlertData(String title, String description, String owner, String id, double lat, double lng, String pets) {
-            this(title, description, owner, id, lat, lng, pets, "");
-        }
+        // Getters for all fields
+        public String getTitle() { return title; }
+        public String getDescription() { return description; }
+        public String getOwner() { return owner; }
+        public String getId() { return id; }
+        public double getLat() { return lat; }
+        public double getLng() { return lng; }
+        public String getPets() { return pets; }
+        public String getContactInfo() { return contactInfo; }
+        public int getEmergencyFee() { return emergencyFee; }
         
-        // Constructor for backward compatibility
-        public AlertData(String title, String description, String owner, String id, double lat, double lng) {
-            this(title, description, owner, id, lat, lng, "[]", "");
+        // Builder class
+        public static class Builder {
+            // Required parameters
+            private String title;
+            private String description;
+            private String owner;
+            private String id;
+            private double lat;
+            private double lng;
+            
+            // Optional parameters with default values
+            private String pets = "[]";
+            private String contactInfo = "";
+            private int emergencyFee = 0;
+            
+            public Builder(String title, String description, String owner, String id, double lat, double lng) {
+                this.title = title;
+                this.description = description;
+                this.owner = owner;
+                this.id = id;
+                this.lat = lat;
+                this.lng = lng;
+            }
+            
+            public Builder pets(String pets) {
+                this.pets = pets;
+                return this;
+            }
+            
+            public Builder contactInfo(String contactInfo) {
+                this.contactInfo = contactInfo;
+                return this;
+            }
+            
+            public Builder emergencyFee(int emergencyFee) {
+                this.emergencyFee = emergencyFee;
+                return this;
+            }
+            
+            public AlertData build() {
+                return new AlertData(this);
+            }
         }
     }
     
     // Custom button class for the expand/collapse button
-    private static class CustomButton extends JButton {
+    public static class CustomButton extends JButton {
         public CustomButton(String text) {
             super(text);
             setFocusPainted(false);

@@ -64,7 +64,8 @@ async function readCSV(fileName) {
     
     const data = fs.readFileSync(filePath, 'utf8');
     // Handle both Windows (\r\n) and Unix (\n) line endings
-    const lines = data.trim().split(/\r?\n/);
+    // Filter out empty lines to prevent parsing issues
+    const lines = data.split(/\r?\n/).filter(line => line.trim() !== '');
     
     if (lines.length === 0 || (lines.length === 1 && lines[0].trim() === '')) return [];
     

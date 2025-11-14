@@ -1,2 +1,2 @@
 emergencyId,userId,userName,userPhone,userEmail,userPets,latitude,longitude,address,emergencyType,status,reportedAt,respondedAt,resolvedAt,assignedResponderId,notes,createdAt,updatedAt
-EMG-0001,USR-0002,Adrian Conde,(0939) 944 9394,s2100092@usls.edu.ph,[],10.666640307729258,122.99316345507782,"Seal Street Bacolod City, Negros Occidental 6100",Pet Health Emergency,ACTIVE,2025-11-13T17:49:42.196Z,,,,,2025-11-13T17:49:42.196Z,2025-11-13T17:49:42.262Z
+EMG-0001,USR-0001,Admin User,123-456-7890,admin@example.com,[],10.677687693467075,122.96251306666394,"Balay K Service Road Bacolod City, Negros Occidental 6100",Pet Health Emergency,ACTIVE,2025-11-14T07:20:28.850Z,,,,,2025-11-14T07:20:28.850Z,2025-11-14T07:20:27.346Z

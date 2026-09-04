@@ -1,29 +1,22 @@
-/* =========================================================
-   HAVEN Emergency Command Center - Redesigned UI/UX
-   Directly modeled after Pinterest References 1, 2 & 3
-   ========================================================= */
-
-/* Outer Canvas Backdrop framing the master floating window (Reference 2) */
+/* Full-Bleed Luxury Command Center Canvas */
 .haven-outer-canvas {
   width: 100vw;
   height: 100vh;
-  padding: 14px;
-  background: radial-gradient(circle at 50% 10%, #1e2433 0%, #0d1017 100%);
+  padding: 0;
+  margin: 0;
+  background-color: var(--bg-canvas-outer);
   display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
   position: relative;
 }
 
-/* Floating Master Application Window with 28px rounded corners */
+/* Master Application Frame */
 .haven-master-frame {
   width: 100%;
   height: 100%;
-  border-radius: 28px;
+  border-radius: 0;
   background-color: var(--bg-frame);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1250,15 +1243,78 @@
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(14, 18, 28, 0.8);
-  backdrop-filter: blur(10px);
+  background: rgba(14, 18, 28, 0.85);
+  backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  padding: 5px 16px;
-  color: var(--text-muted);
+  padding: 6px 18px;
+  color: var(--text-secondary);
   font-size: 0.72rem;
   pointer-events: none;
   z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.map3d-floating-toolbar {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(13, 16, 25, 0.88);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  padding: 5px 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.map3d-tool-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.2s var(--ease-spring);
+}
+
+.map3d-tool-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.map3d-tool-chip.active {
+  background: rgba(0, 240, 168, 0.16);
+  border-color: var(--accent-mint);
+  color: var(--accent-mint);
+  box-shadow: 0 0 14px rgba(0, 240, 168, 0.25);
+}
+
+.map3d-chip-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+
+.map3d-park-label {
+  background: rgba(13, 26, 44, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: #7dd3fc;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------

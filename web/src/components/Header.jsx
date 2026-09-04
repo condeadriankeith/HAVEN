@@ -8,7 +8,6 @@ import {
   Send,
   MapPin,
   Clock,
-  Layers,
   Box,
   CloudSun,
 } from 'lucide-react';
@@ -18,8 +17,6 @@ export default function Header({
   isConnected = false,
   soundEnabled = true,
   activeCount = 0,
-  mapMode = '2D',
-  onToggleMapMode,
   onToggleSound,
   onOpenSimulateModal,
 }) {
@@ -70,28 +67,10 @@ export default function Header({
           <span>Bacolod Central Command</span>
         </div>
 
-        {/* 2D / 3D Mode Toggle Switch matching Reference 3 & User Request */}
-        <div className="frosted-pill-segmented-control">
-          <button
-            className={`pill-segment-btn ${mapMode === '2D' ? 'active' : ''}`}
-            onClick={() => {
-              playClickFeedback();
-              onToggleMapMode('2D');
-            }}
-          >
-            <Layers size={13} />
-            <span>2D Tactical</span>
-          </button>
-          <button
-            className={`pill-segment-btn ${mapMode === '3D' ? 'active' : ''}`}
-            onClick={() => {
-              playClickFeedback();
-              onToggleMapMode('3D');
-            }}
-          >
-            <Box size={13} />
-            <span>3D City Space</span>
-          </button>
+        {/* 3D City Engine Active Pill */}
+        <div className="frosted-pill mode-active-pill">
+          <Box size={13} className="text-mint" />
+          <span>3D City Space • Active</span>
         </div>
 
         {/* Live Weather & Telemetry */}

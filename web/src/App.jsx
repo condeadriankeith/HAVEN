@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import MapView from './components/MapView';
 import Map3DView from './components/Map3DView';
 import AlertPanel from './components/AlertPanel';
 import RouteTimelineHUD from './components/RouteTimelineHUD';
@@ -16,7 +15,6 @@ import './App.css';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('map');
-  const [mapMode, setMapMode] = useState('2D'); // '2D' or '3D'
   const [users, setUsers] = useState([]);
   const [isSimulateModalOpen, setIsSimulateModalOpen] = useState(false);
   const [pickedLocation, setPickedLocation] = useState(null);
@@ -90,8 +88,6 @@ export default function App() {
           isConnected={isConnected}
           soundEnabled={soundEnabled}
           activeCount={emergencies.length}
-          mapMode={mapMode}
-          onToggleMapMode={(mode) => setMapMode(mode)}
           onToggleSound={toggleSound}
           onOpenSimulateModal={() => {
             setPickedLocation(null);
@@ -119,27 +115,16 @@ export default function App() {
                   onMarkResponded={markResponded}
                 />
 
-                {/* Center / Right Map Area */}
+                {/* Center / Right 3D Map Area */}
                 <div className="ref2-map-viewport">
-                  {mapMode === '3D' ? (
-                    <Map3DView
-                      emergencies={emergencies}
-                      selectedEmergency={selectedEmergency}
-                      routeCoordinates={routeCoordinates}
-                      routeInfo={routeInfo}
-                      onSelectEmergency={selectEmergency}
-                      onLocationPicked={handleMapLocationPicked}
-                    />
-                  ) : (
-                    <MapView
-                      emergencies={emergencies}
-                      selectedEmergency={selectedEmergency}
-                      routeCoordinates={routeCoordinates}
-                      routeInfo={routeInfo}
-                      onSelectEmergency={selectEmergency}
-                      onLocationPicked={handleMapLocationPicked}
-                    />
-                  )}
+                  <Map3DView
+                    emergencies={emergencies}
+                    selectedEmergency={selectedEmergency}
+                    routeCoordinates={routeCoordinates}
+                    _routeInfo={routeInfo}
+                    onSelectEmergency={selectEmergency}
+                    onLocationPicked={handleMapLocationPicked}
+                  />
 
                   {/* Reference 1: Turn-by-turn Navigation Route Timeline HUD */}
                   {selectedEmergency && routeInfo && (

@@ -14,10 +14,29 @@ const authenticatedClients = new Map();
  * @param {http.Server} server - HTTP server instance
  */
 function initializeWebSocketServer(server) {
-  const wss = new WebSocket.Server({ server });
+  const wss = new WebSocket.Server({ server, path: '/ws' });
+
+  // Heartbeat to prune dead connections
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (!ws.isAlive) return ws.terminate();
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
   
   wss.on('connection', (ws, req) => {
-    console.log('New WebSocket connection established');
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+    ws.on('error', (err) => {
+      console.warn('WebSocket connection handled safely:', err.message);
+    });
+
+    console.log('New WebSocket connection established on /ws');
     
     // Assign a temporary ID to the client
     const clientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -40,7 +59,7 @@ function initializeWebSocketServer(server) {
             console.log(`User ${ws.userId} authenticated`);
           } catch (err) {
             ws.send(JSON.stringify({ type: 'error', message: 'Authentication failed' }));
-            ws.close();
+            ws.close(1008, 'Authentication failed');
           }
         }
         // Handle emergency updates

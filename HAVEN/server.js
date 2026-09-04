@@ -117,7 +117,7 @@ app.use(express.json());
   // Initialize Socket.IO server
   const io = socketIo(server, {
     cors: {
-      origin: ["http://localhost:8080", "http://localhost:19006"], // Desktop and mobile app origins
+      origin: true, // Allow all origins for web, desktop, and mobile
       methods: ["GET", "POST"]
     }
   });

@@ -1,52 +1,47 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Clock, Compass, Crosshair } from 'lucide-react';
-import { DEFAULT_VET_LAT, DEFAULT_VET_LNG } from '../hooks/useEmergencies';
+import 'leaflet/dist/leaflet.css';
 
-// Fix Leaflet marker asset references
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+const DEFAULT_VET_LAT = 10.6765;
+const DEFAULT_VET_LNG = 122.9509;
+const DEFAULT_CENTER = [DEFAULT_VET_LAT, DEFAULT_VET_LNG];
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: markerIcon,
-  iconRetinaUrl: markerIcon2x,
-  shadowUrl: markerShadow,
-});
-
-// Custom Sonar Radar Pin with Multi-Ring Ripple Animation
-const createEmergencySonarIcon = (isSelected, type = '') => {
-  const isCat = type.toLowerCase().includes('cat') || type.toLowerCase().includes('feline');
-  const iconSymbol = isCat ? '🐱' : '🚨';
+// Circular Pin with Pill Badge directly modeled after Reference 2 ("outletbuddy")
+const createReference2Pin = (isSelected, emergency) => {
+  const isCritical = emergency.priority === 'CRITICAL';
+  const score = isCritical ? '98' : '80';
+  const icon = emergency.petName ? '🐾' : '🚨';
 
   return L.divIcon({
-    className: 'custom-emergency-pin',
+    className: 'ref2-pin-leaflet-wrapper',
     html: `
-      <div class="sonar-pin-container ${isSelected ? 'selected' : ''}">
-        <div class="sonar-ripple"></div>
-        <div class="sonar-ripple-outer"></div>
-        <div class="sonar-core">${iconSymbol}</div>
+      <div class="ref2-map-pin ${isSelected ? 'selected' : ''} ${isCritical ? 'critical' : ''}">
+        <div class="ref2-pin-disc">
+          <span class="ref2-pin-symbol">${icon}</span>
+        </div>
+        <div class="ref2-pin-badge">
+          <span class="ref2-badge-score">${score}</span>
+        </div>
       </div>
     `,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    popupAnchor: [0, -22],
+    iconSize: [44, 54],
+    iconAnchor: [22, 52],
+    popupAnchor: [0, -50],
   });
 };
 
 // Custom Vet HQ Center Pin
 const vetHqIcon = L.divIcon({
-  className: 'custom-vethub-pin',
+  className: 'ref2-vethq-leaflet-wrapper',
   html: `
-    <div class="vet-hq-pin" title="HAVEN Central Veterinary Command">
+    <div class="ref2-vethq-pin" title="HAVEN Central Veterinary Command">
       🏥
     </div>
   `,
-  iconSize: [34, 34],
-  iconAnchor: [17, 17],
-  popupAnchor: [0, -18],
+  iconSize: [38, 38],
+  iconAnchor: [19, 19],
+  popupAnchor: [0, -20],
 });
 
 // Smooth Camera Controller with Ease-Out Lerping
@@ -75,54 +70,19 @@ function MapLocationPicker({ onLocationPicked }) {
   return null;
 }
 
-const DEFAULT_CENTER = [DEFAULT_VET_LAT, DEFAULT_VET_LNG];
-
-const MapView = ({
+export default function MapView({
   emergencies = [],
   selectedEmergency = null,
   routeCoordinates = [],
-  routeInfo = null,
   onSelectEmergency,
   onLocationPicked,
-}) => {
+}) {
   const mapCenter = selectedEmergency
     ? [selectedEmergency.lat, selectedEmergency.lng]
     : DEFAULT_CENTER;
 
   return (
     <div className="map-view-container">
-      {/* Floating Tactical Route HUD */}
-      {selectedEmergency && routeInfo && (
-        <div className="tactical-route-hud">
-          <div className="hud-stat">
-            <span className="hud-stat-label">
-              <Crosshair size={11} className="text-cyan" /> Incident Target
-            </span>
-            <span className="hud-destination">{selectedEmergency.title}</span>
-          </div>
-
-          <div className="hud-divider-line" />
-
-          <div className="hud-stat">
-            <span className="hud-stat-label">
-              <Compass size={11} className="text-amber" /> Distance
-            </span>
-            <span className="hud-stat-value">{routeInfo.distanceKm} km</span>
-          </div>
-
-          <div className="hud-divider-line" />
-
-          <div className="hud-stat">
-            <span className="hud-stat-label">
-              <Clock size={11} className="text-emerald" /> Est. ETA
-            </span>
-            <span className="hud-stat-value" style={{ color: 'var(--accent-emerald)' }}>
-              ~{routeInfo.durationMin} min
-            </span>
-          </div>
-        </div>
-      )}
-
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={13}
@@ -150,14 +110,14 @@ const MapView = ({
           </Popup>
         </Marker>
 
-        {/* Sonar Emergency Pins */}
+        {/* Reference 2 Map Pins */}
         {emergencies.map((e) => {
           const isSelected = selectedEmergency && selectedEmergency.id === e.id;
           return (
             <Marker
               key={e.id}
               position={[e.lat, e.lng]}
-              icon={createEmergencySonarIcon(isSelected, e.title)}
+              icon={createReference2Pin(isSelected, e)}
               eventHandlers={{
                 click: () => onSelectEmergency(e),
               }}
@@ -165,40 +125,33 @@ const MapView = ({
               <Popup>
                 <div className="popup-content">
                   <h4>🚨 {e.title}</h4>
-                  <p><strong>ID:</strong> {e.id}</p>
+                  <p><strong>Pet:</strong> {e.petName || 'Companion Animal'}</p>
                   <p><strong>Owner:</strong> {e.owner}</p>
                   <p><strong>Contact:</strong> {e.phone || 'N/A'}</p>
                   <p><strong>Telemetry:</strong> {e.lat.toFixed(4)}, {e.lng.toFixed(4)}</p>
-                  {e.emergencyFee > 0 && (
-                    <p className="fee-text">
-                      <strong>Est. Response Fee:</strong> ₱{e.emergencyFee}
-                    </p>
-                  )}
                 </div>
               </Popup>
             </Marker>
           );
         })}
 
-        {/* Animated Street Route Flowing Line */}
+        {/* Glowing Mint/Teal Route Lines modeled after Reference 1 & 2 */}
         {routeCoordinates && routeCoordinates.length > 0 && (
           <>
-            {/* Outer neon dispersion glow */}
+            {/* Ambient Cyan Dispersion Tube */}
             <Polyline
               positions={routeCoordinates}
-              pathOptions={{ color: '#00e5ff', weight: 8, opacity: 0.35 }}
+              pathOptions={{ color: '#00e5ff', weight: 10, opacity: 0.3 }}
             />
-            {/* Inner dynamic animated dashed street line */}
+            {/* Sharp Glowing Mint Route Line */}
             <Polyline
               positions={routeCoordinates}
               className="route-drawing-path"
-              pathOptions={{ color: '#ff2a44', weight: 4.5, opacity: 0.95 }}
+              pathOptions={{ color: '#00f0a8', weight: 4.5, opacity: 0.95 }}
             />
           </>
         )}
       </MapContainer>
     </div>
   );
-};
-
-export default MapView;
+}

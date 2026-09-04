@@ -1,179 +1,182 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  Phone,
-  User,
+  Search,
   PawPrint,
   MapPin,
-  CircleDollarSign,
-  Compass,
+  X,
 } from 'lucide-react';
 import { playClickFeedback } from '../utils/sound';
 
-const AlertPanel = ({
+export default function AlertPanel({
   emergencies = [],
   selectedEmergency = null,
   onSelectEmergency,
-  onMarkResponded,
-}) => {
-  const [expandedIds, setExpandedIds] = useState({});
+  _onMarkResponded,
+}) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('NEAREST');
 
-  const toggleExpand = (id, e) => {
-    e.stopPropagation();
-    playClickFeedback();
-    setExpandedIds((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
+  // Filter and sort items
+  const filteredEmergencies = useMemo(() => {
+    return emergencies
+      .filter((e) => {
+        // Status filter
+        if (statusFilter === 'ACTIVE' && e.status !== 'ACTIVE') return false;
+        if (statusFilter === 'RESPONDED' && e.status !== 'RESPONDED') return false;
+        if (statusFilter === 'RESOLVED' && e.status !== 'RESOLVED') return false;
 
-  const parsePets = (petsJson) => {
-    if (!petsJson || petsJson === '[]') return null;
-    try {
-      const parsed = typeof petsJson === 'string' ? JSON.parse(petsJson) : petsJson;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((p, idx) => {
-          const name = p.name || 'Pet';
-          const breed = p.breed ? `${p.breed}` : `${p.type || 'Unknown'}`;
-          return (
-            <span key={idx} className="pet-tag">
-              {name} ({breed})
-            </span>
-          );
-        });
-      }
-    } catch {
-      if (typeof petsJson === 'string' && petsJson.trim().length > 0) {
-        return <span className="pet-tag">{petsJson}</span>;
-      }
-    }
-    return null;
-  };
+        // Search term filter
+        if (!searchTerm.trim()) return true;
+        const query = searchTerm.toLowerCase();
+        return (
+          e.title?.toLowerCase().includes(query) ||
+          e.owner?.toLowerCase().includes(query) ||
+          e.petName?.toLowerCase().includes(query) ||
+          e.address?.toLowerCase().includes(query) ||
+          e.notes?.toLowerCase().includes(query)
+        );
+      })
+      .sort((a, b) => {
+        if (sortBy === 'CRITICAL') {
+          const pA = a.priority === 'CRITICAL' ? 2 : a.priority === 'URGENT' ? 1 : 0;
+          const pB = b.priority === 'CRITICAL' ? 2 : b.priority === 'URGENT' ? 1 : 0;
+          return pB - pA;
+        }
+        if (sortBy === 'NEWEST') {
+          return new Date(b.time || 0) - new Date(a.time || 0);
+        }
+        // Default nearest / active
+        return 0;
+      });
+  }, [emergencies, statusFilter, sortBy, searchTerm]);
+
+  const activeCount = emergencies.filter((e) => e.status === 'ACTIVE').length;
 
   return (
-    <aside className="haven-alert-panel" aria-label="Incoming Emergency Incidents">
-      <div className="panel-top-bar">
-        <div className="panel-title-group">
-          <AlertTriangle size={18} className="text-red" />
-          <h2>Emergency Stream</h2>
+    <div className="incident-directory-panel">
+      {/* Brand Header matching Reference 2 ("outletbuddy" style) */}
+      <div className="directory-brand-header">
+        <div className="brand-pill-avatar">
+          <PawPrint size={18} className="text-cyan" />
         </div>
-        <div className="badge-live-count">
-          <span className="ticker-dot" style={{ width: 5, height: 5 }} />
-          <span>{emergencies.length} Active Incidents</span>
+        <div className="brand-text">
+          <h2 className="brand-title">HAVEN Console</h2>
+          <span className="brand-subtitle">Emergency Dispatch Grid</span>
+        </div>
+        <div className="live-counter-pill">
+          <span className="live-dot" />
+          <span>{activeCount} Active</span>
         </div>
       </div>
 
-      <div className="alert-cards-scroll">
-        {emergencies.length === 0 ? (
-          <div className="empty-alerts">
-            <CheckCircle2 size={46} className="text-emerald" style={{ marginBottom: 14 }} />
-            <h3>Sector All Clear</h3>
-            <p>No active emergencies reported across Bacolod City jurisdiction.</p>
+      {/* Rounded Search Bar */}
+      <div className="directory-search-wrapper">
+        <Search size={15} className="search-icon" />
+        <input
+          type="text"
+          className="directory-search-input"
+          placeholder="Search emergencies, pets, streets..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        {searchTerm && (
+          <button className="search-clear-btn" onClick={() => setSearchTerm('')}>
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* Filter Pills Row matching Reference 2 */}
+      <div className="directory-filters-row">
+        <div className="filter-pill-select-group">
+          <label className="filter-pill-label">Show:</label>
+          <select
+            className="filter-pill-select"
+            value={statusFilter}
+            onChange={(e) => {
+              playClickFeedback();
+              setStatusFilter(e.target.value);
+            }}
+          >
+            <option value="ALL">All Cases</option>
+            <option value="ACTIVE">Active Now</option>
+            <option value="RESPONDED">Dispatched</option>
+            <option value="RESOLVED">Resolved</option>
+          </select>
+        </div>
+
+        <div className="filter-pill-select-group">
+          <label className="filter-pill-label">Sort:</label>
+          <select
+            className="filter-pill-select"
+            value={sortBy}
+            onChange={(e) => {
+              playClickFeedback();
+              setSortBy(e.target.value);
+            }}
+          >
+            <option value="NEAREST">Nearest</option>
+            <option value="CRITICAL">Critical First</option>
+            <option value="NEWEST">Newest</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Incident List Items matching Reference 2 */}
+      <div className="directory-list-scroll">
+        {filteredEmergencies.length === 0 ? (
+          <div className="empty-directory-state">
+            <PawPrint size={36} className="empty-icon" />
+            <p>No emergencies match current filters</p>
           </div>
         ) : (
-          emergencies.map((alert, idx) => {
-            const isSelected = selectedEmergency && selectedEmergency.id === alert.id;
-            const isExpanded = !!expandedIds[alert.id];
-            const petsElements = parsePets(alert.pets);
-            const severityClass = alert.severity === 'CRITICAL' ? 'critical' : 'urgent';
+          filteredEmergencies.map((e) => {
+            const isSelected = selectedEmergency && selectedEmergency.id === e.id;
+            const petInitial = e.petName ? e.petName.charAt(0).toUpperCase() : '🐾';
+            const petBreed = e.petBreed || e.breed || 'Companion';
+            const isCritical = e.priority === 'CRITICAL';
 
             return (
-              <article
-                key={alert.id}
-                className={`incident-card ${isSelected ? 'selected' : ''}`}
-                style={{ animationDelay: `${idx * 0.06}s` }}
-                onClick={() => onSelectEmergency(alert)}
-                role="button"
-                tabIndex={0}
+              <div
+                key={e.id}
+                className={`directory-item-card ${isSelected ? 'selected' : ''}`}
+                onClick={() => {
+                  playClickFeedback();
+                  onSelectEmergency(e);
+                }}
               >
-                <div className="card-heading-row">
-                  <div className="card-title-meta">
-                    <h3>{alert.title}</h3>
-                    <div className="card-tags">
-                      <span className="badge-id">{alert.id}</span>
-                      <span className={`badge-severity ${severityClass}`}>
-                        {alert.severity}
-                      </span>
-                      <span className="badge-id" style={{ color: 'var(--accent-amber)', background: 'rgba(255, 179, 0, 0.1)' }}>
-                        <Compass size={10} style={{ display: 'inline', marginRight: 3 }} />
-                        {alert.distanceKm} km
-                      </span>
-                    </div>
+                {/* Left circular avatar with status ring */}
+                <div className="item-avatar-wrapper">
+                  <div className={`item-avatar-circle ${isCritical ? 'critical' : ''}`}>
+                    <span>{petInitial}</span>
                   </div>
-
-                  <button
-                    className="btn-icon-tactile"
-                    style={{ width: 28, height: 28 }}
-                    onClick={(e) => toggleExpand(alert.id, e)}
-                    title={isExpanded ? 'Collapse' : 'Expand Details'}
-                    aria-label="Toggle details"
-                  >
-                    {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                  </button>
+                  <span className={`item-status-indicator status-${e.status.toLowerCase()}`} />
                 </div>
 
-                <p className="card-synopsis">
-                  {isExpanded || (alert.description && alert.description.length <= 85)
-                    ? alert.description
-                    : `${(alert.description || '').substring(0, 85)}...`}
-                </p>
-
-                <div className="card-data-grid">
-                  <div className="data-row">
-                    <User size={13} className="text-cyan" />
-                    <span>Caller: <strong>{alert.owner}</strong></span>
+                {/* Central Info Column */}
+                <div className="item-info-col">
+                  <div className="item-title-row">
+                    <strong className="item-name">{e.petName || e.title}</strong>
+                    <span className="item-breed"> • {petBreed}</span>
                   </div>
-
-                  {alert.phone && (
-                    <div className="data-row">
-                      <Phone size={13} className="text-cyan" />
-                      <a href={`tel:${alert.phone}`} onClick={(e) => e.stopPropagation()}>
-                        {alert.phone}
-                      </a>
-                    </div>
-                  )}
-
-                  {petsElements && (
-                    <div className="data-row" style={{ flexWrap: 'wrap', gap: 4 }}>
-                      <PawPrint size={13} className="text-cyan" />
-                      <span style={{ marginRight: 4 }}>Pets:</span>
-                      {petsElements}
-                    </div>
-                  )}
-
-                  <div className="data-row">
-                    <MapPin size={13} className="text-cyan" />
-                    <span>GPS: {alert.lat.toFixed(4)}, {alert.lng.toFixed(4)}</span>
+                  <div className="item-address-row">
+                    <MapPin size={11} className="text-muted" />
+                    <span className="item-address-text">{e.address || 'Bacolod City'}</span>
                   </div>
-
-                  {alert.emergencyFee > 0 && (
-                    <div className="data-row">
-                      <CircleDollarSign size={13} className="text-emerald" />
-                      <span className="fee-highlight">Est. Fee: ₱{alert.emergencyFee}</span>
-                    </div>
-                  )}
                 </div>
 
-                <button
-                  className="btn-dispatch-action"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMarkResponded(alert);
-                  }}
-                >
-                  <CheckCircle2 size={15} />
-                  <span>Acknowledge & Dispatch Units</span>
-                </button>
-              </article>
+                {/* Right Severity Score Badge matching Reference 2 */}
+                <div className="item-score-badge">
+                  <span className={`score-tag ${isCritical ? 'tag-critical' : 'tag-urgent'}`}>
+                    {isCritical ? '🚨 98%' : '⚠️ 80%'}
+                  </span>
+                </div>
+              </div>
             );
           })
         )}
       </div>
-    </aside>
+    </div>
   );
-};
-
-export default AlertPanel;
+}

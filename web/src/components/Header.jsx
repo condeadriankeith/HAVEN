@@ -1,14 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Wifi, WifiOff, Volume2, VolumeX, Send, MapPin, Clock, Radio } from 'lucide-react';
+import {
+  ShieldAlert,
+  Wifi,
+  WifiOff,
+  Volume2,
+  VolumeX,
+  Send,
+  MapPin,
+  Clock,
+  Layers,
+  Box,
+  CloudSun,
+} from 'lucide-react';
 import { playClickFeedback } from '../utils/sound';
 
-const Header = ({
+export default function Header({
   isConnected = false,
   soundEnabled = true,
   activeCount = 0,
+  mapMode = '2D',
+  onToggleMapMode,
   onToggleSound,
   onOpenSimulateModal,
-}) => {
+}) {
   const [timeString, setTimeString] = useState('');
 
   useEffect(() => {
@@ -17,7 +31,7 @@ const Header = ({
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
-      setTimeString(`${hours}:${minutes}:${seconds} PST`);
+      setTimeString(`${hours}:${minutes}:${seconds}`);
     };
 
     updateTime();
@@ -25,89 +39,106 @@ const Header = ({
     return () => clearInterval(interval);
   }, []);
 
-  const handleSoundToggleClick = () => {
-    playClickFeedback();
-    onToggleSound();
-  };
-
-  const handleSimulateClick = () => {
-    playClickFeedback();
-    onOpenSimulateModal();
-  };
-
   return (
-    <header className="haven-header">
-      <div className="header-left">
-        <div className="brand-icon-wrap" title="HAVEN Emergency Response Network">
-          <ShieldAlert size={22} />
-          <div className="brand-ping" />
+    <header className="haven-glass-header">
+      {/* Left Operations Title */}
+      <div className="header-brand-group">
+        <div className="brand-symbol-box">
+          <ShieldAlert size={20} className="text-red" />
+          <span className="brand-pulse-ring" />
         </div>
-
-        <div className="brand-text">
-          <div className="brand-title">
-            HAVEN <span className="brand-badge">Command Center</span>
+        <div className="brand-title-group">
+          <div className="brand-main-text">
+            <span>HAVEN</span>
+            <span className="brand-ops-tag">OPS CONSOLE</span>
           </div>
-          <span className="brand-subtitle">Pet Emergency Response & Dispatch Hub</span>
-        </div>
-
-        {/* Live Incident Activity Ticker */}
-        <div className="header-ticker-wrap">
-          <span className="ticker-dot" />
-          <span>
-            {activeCount > 0
-              ? `LIVE DISPATCH ACTIVE: ${activeCount} INCIDENT(S) UNDER MONITORING`
-              : 'NETWORK QUIET // ALL SECTORS OPTIMAL // 0 ACTIVE INCIDENTS'}
-          </span>
+          <span className="brand-subtext">Bacolod Metropolitan Dispatch Network</span>
         </div>
       </div>
 
-      <div className="header-right">
-        {/* Simulate SOS Trigger */}
+      {/* Center Frosted Glass Pills matching Reference 3 ("ShotScope") */}
+      <div className="header-frosted-pills-bar">
+        {/* Active Alert Count Pill */}
+        <div className="frosted-pill">
+          <ShieldAlert size={13} className="text-red" />
+          <span>{activeCount} Active SOS</span>
+        </div>
+
+        {/* Region Pill */}
+        <div className="frosted-pill">
+          <MapPin size={13} className="text-cyan" />
+          <span>Bacolod Central Command</span>
+        </div>
+
+        {/* 2D / 3D Mode Toggle Switch matching Reference 3 & User Request */}
+        <div className="frosted-pill-segmented-control">
+          <button
+            className={`pill-segment-btn ${mapMode === '2D' ? 'active' : ''}`}
+            onClick={() => {
+              playClickFeedback();
+              onToggleMapMode('2D');
+            }}
+          >
+            <Layers size={13} />
+            <span>2D Tactical</span>
+          </button>
+          <button
+            className={`pill-segment-btn ${mapMode === '3D' ? 'active' : ''}`}
+            onClick={() => {
+              playClickFeedback();
+              onToggleMapMode('3D');
+            }}
+          >
+            <Box size={13} />
+            <span>3D City Space</span>
+          </button>
+        </div>
+
+        {/* Live Weather & Telemetry */}
+        <div className="frosted-pill weather-pill">
+          <CloudSun size={14} className="text-amber" />
+          <span>28°C Clear</span>
+        </div>
+
+        {/* Live Clock */}
+        <div className="frosted-pill clock-pill">
+          <Clock size={13} className="text-muted" />
+          <span className="time-mono">{timeString}</span>
+        </div>
+      </div>
+
+      {/* Right Action Tools */}
+      <div className="header-action-group">
+        {/* Connection status indicator */}
+        <div className={`connection-pill ${isConnected ? 'connected' : 'offline'}`}>
+          {isConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
+          <span>{isConnected ? 'ONLINE 14ms' : 'CONNECTING...'}</span>
+        </div>
+
+        {/* Audio Siren Toggle */}
         <button
-          className="btn-simulate-sos"
-          onClick={handleSimulateClick}
-          title="Simulate incoming mobile emergency alert"
+          className={`header-tool-btn ${soundEnabled ? 'active' : 'muted'}`}
+          onClick={() => {
+            playClickFeedback();
+            onToggleSound();
+          }}
+          title={soundEnabled ? 'Audio alerts active (click to mute)' : 'Audio muted (click to unmute)'}
+        >
+          {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </button>
+
+        {/* SOS Dispatch Simulator Modal Trigger */}
+        <button
+          className="header-simulate-btn"
+          onClick={() => {
+            playClickFeedback();
+            onOpenSimulateModal();
+          }}
         >
           <Send size={14} />
-          <span>Simulate Mobile SOS</span>
+          <span>Simulate SOS</span>
         </button>
-
-        {/* Tactical Siren Audio Toggle */}
-        <button
-          className={`btn-icon-tactile ${soundEnabled ? 'active' : ''}`}
-          onClick={handleSoundToggleClick}
-          title={soundEnabled ? 'Audio Siren Active (Click to Mute)' : 'Audio Muted (Click to Unmute)'}
-          aria-label="Toggle Siren"
-        >
-          {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-        </button>
-
-        {/* Live Telemetry Bar */}
-        <div className="telemetry-bar">
-          <div className="telemetry-node">
-            <MapPin size={13} className="text-cyan" />
-            <span>Bacolod City HQ</span>
-          </div>
-          <div className="telemetry-sep" />
-          <div className="telemetry-node">
-            <Radio size={13} className="text-emerald" />
-            <span>Ping: <strong>14ms</strong></span>
-          </div>
-          <div className="telemetry-sep" />
-          <div className="telemetry-node">
-            <Clock size={13} className="text-amber" />
-            <strong>{timeString}</strong>
-          </div>
-        </div>
-
-        {/* Connection Indicator */}
-        <div className={`connection-indicator ${isConnected ? 'online' : 'offline'}`}>
-          {isConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
-          <span>{isConnected ? 'Telemetry Online' : 'Connecting...'}</span>
-        </div>
       </div>
     </header>
   );
-};
-
-export default Header;
+}

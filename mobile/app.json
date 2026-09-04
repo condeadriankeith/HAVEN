@@ -6,12 +6,7 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#D32F2F"
-    },
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.haven.petemergency",
@@ -26,7 +21,7 @@
         "backgroundColor": "#D32F2F"
       },
       "package": "com.haven.petemergency",
-      "edgeToEdgeEnabled": true,
+
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -36,7 +31,17 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-location"
+      "expo-location",
+      "expo-status-bar",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#D32F2F"
+        }
+      ]
     ]
   }
 }

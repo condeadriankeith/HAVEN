@@ -91,15 +91,6 @@ const MapView = ({
 
   return (
     <div className="map-view-container">
-      {/* Visual Rotating Radar Sweep Screen Overlay */}
-      <div className="radar-sweep-screen" aria-hidden="true">
-        <div className="radar-circle-grid">
-          <div className="radar-crosshair-x" />
-          <div className="radar-crosshair-y" />
-          <div className="radar-sweep-beam" />
-        </div>
-      </div>
-
       {/* Floating Tactical Route HUD */}
       {selectedEmergency && routeInfo && (
         <div className="tactical-route-hud">

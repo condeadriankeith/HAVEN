@@ -1,36 +1,51 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
-  --bg-void: #070a12;
-  --bg-base: #0b111e;
-  --bg-surface: #101726;
-  --bg-surface-elevated: #162035;
-  --bg-card: rgba(16, 23, 38, 0.9);
-  --bg-glass: rgba(16, 23, 38, 0.75);
-  
-  --border: #1c273e;
-  --border-subtle: #151f32;
-  --border-focus: #38bdf8;
-  
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
-  
-  --accent-red: #ff334b;
-  --accent-red-hover: #e0243b;
-  --accent-red-glow: rgba(255, 51, 75, 0.35);
-  
-  --accent-amber: #f59e0b;
-  --accent-amber-glow: rgba(245, 158, 11, 0.25);
-  
-  --accent-emerald: #10b981;
-  --accent-emerald-glow: rgba(16, 185, 129, 0.25);
-  
-  --accent-blue: #38bdf8;
-  --accent-blue-glow: rgba(56, 189, 248, 0.25);
-  
-  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* =========================================================
+     Tactical Obsidian Command Center Palette (pbakaus/impeccable)
+     ========================================================= */
+  --bg-void: #06090e;
+  --bg-base: #090d15;
+  --bg-surface: #0f1522;
+  --bg-surface-elevated: #151c2d;
+  --bg-card: rgba(15, 21, 34, 0.88);
+  --bg-card-hover: rgba(21, 28, 45, 0.95);
+  --bg-glass: rgba(15, 21, 34, 0.78);
+
+  /* Precise, tinted border hierarchy */
+  --border: #1a2337;
+  --border-subtle: #121827;
+  --border-highlight: rgba(0, 229, 255, 0.35);
+
+  /* High-contrast typography */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+
+  /* Intentional Tactical Accents (Zero generic purples) */
+  --accent-crimson: #ff2a44;
+  --accent-crimson-hover: #e01f37;
+  --accent-crimson-glow: rgba(255, 42, 68, 0.4);
+
+  --accent-cyan: #00e5ff;
+  --accent-cyan-hover: #00bfe6;
+  --accent-cyan-glow: rgba(0, 229, 255, 0.35);
+
+  --accent-amber: #ffb300;
+  --accent-amber-glow: rgba(255, 179, 0, 0.3);
+
+  --accent-emerald: #00f090;
+  --accent-emerald-glow: rgba(0, 240, 144, 0.3);
+
+  /* Type Scales */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Natural Apple/Framer-grade Spring Easing */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 *, *::before, *::after {
@@ -46,10 +61,11 @@ html, body {
   padding: 0;
   overflow: hidden;
   background-color: var(--bg-void);
-  color: var(--text-main);
-  font-family: var(--sans);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -61,41 +77,65 @@ html, body {
   flex-direction: column;
   overflow: hidden;
   background-color: var(--bg-void);
+  position: relative;
 }
 
-/* Custom Sleek Scrollbar */
+/* Ambient Emergency Distress Perimeter Pulse */
+#root.emergency-distress-active::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow: inset 0 0 70px rgba(255, 42, 68, 0.25), inset 0 0 20px rgba(255, 42, 68, 0.4);
+  animation: distress-breathe 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes distress-breathe {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.9; }
+}
+
+/* Tactical Ultra-thin Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-surface);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #25334e;
+  background: #1e293b;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334466;
+  background: #334155;
 }
 
-/* Base button and input resets */
+/* Modern reset for interactive controls */
 button {
   font-family: inherit;
   cursor: pointer;
   border: none;
   background: none;
-  transition: all 0.15s ease-in-out;
+  transition: all 0.2s var(--ease-spring);
+  user-select: none;
+}
+
+button:active {
+  transform: scale(0.97);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.4;
+  transform: none;
 }
 
 input, select, textarea {
   font-family: inherit;
+  color: inherit;
 }

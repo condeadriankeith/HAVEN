@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Wifi, WifiOff, Volume2, VolumeX, Send, MapPin, Clock } from 'lucide-react';
+import { ShieldAlert, Wifi, WifiOff, Volume2, VolumeX, Send, MapPin, Clock, Radio } from 'lucide-react';
+import { playClickFeedback } from '../utils/sound';
 
-const Header = ({ isConnected, soundEnabled, onToggleSound, onOpenSimulateModal }) => {
+const Header = ({
+  isConnected = false,
+  soundEnabled = true,
+  activeCount = 0,
+  onToggleSound,
+  onOpenSimulateModal,
+}) => {
   const [timeString, setTimeString] = useState('');
 
   useEffect(() => {
@@ -18,58 +25,84 @@ const Header = ({ isConnected, soundEnabled, onToggleSound, onOpenSimulateModal 
     return () => clearInterval(interval);
   }, []);
 
+  const handleSoundToggleClick = () => {
+    playClickFeedback();
+    onToggleSound();
+  };
+
+  const handleSimulateClick = () => {
+    playClickFeedback();
+    onOpenSimulateModal();
+  };
+
   return (
     <header className="haven-header">
       <div className="header-left">
-        <div className="brand-icon-wrap">
+        <div className="brand-icon-wrap" title="HAVEN Emergency Response Network">
           <ShieldAlert size={22} />
           <div className="brand-ping" />
         </div>
+
         <div className="brand-text">
           <div className="brand-title">
             HAVEN <span className="brand-badge">Command Center</span>
           </div>
-          <span className="brand-subtitle">Pet Emergency Rapid Response System</span>
+          <span className="brand-subtitle">Pet Emergency Response & Dispatch Hub</span>
+        </div>
+
+        {/* Live Incident Activity Ticker */}
+        <div className="header-ticker-wrap">
+          <span className="ticker-dot" />
+          <span>
+            {activeCount > 0
+              ? `LIVE DISPATCH ACTIVE: ${activeCount} INCIDENT(S) UNDER MONITORING`
+              : 'NETWORK QUIET // ALL SECTORS OPTIMAL // 0 ACTIVE INCIDENTS'}
+          </span>
         </div>
       </div>
 
       <div className="header-right">
-        {/* Trigger test SOS alert directly from browser */}
+        {/* Simulate SOS Trigger */}
         <button
           className="btn-simulate-sos"
-          onClick={onOpenSimulateModal}
-          title="Open SOS Dispatch Simulator"
+          onClick={handleSimulateClick}
+          title="Simulate incoming mobile emergency alert"
         >
-          <Send size={15} />
+          <Send size={14} />
           <span>Simulate Mobile SOS</span>
         </button>
 
-        {/* Audio Siren Toggle */}
+        {/* Tactical Siren Audio Toggle */}
         <button
-          className={`btn-icon-toggle ${soundEnabled ? 'active' : ''}`}
-          onClick={onToggleSound}
-          title={soundEnabled ? 'Audio Siren Enabled (Click to Mute)' : 'Audio Siren Muted (Click to Enable)'}
+          className={`btn-icon-tactile ${soundEnabled ? 'active' : ''}`}
+          onClick={handleSoundToggleClick}
+          title={soundEnabled ? 'Audio Siren Active (Click to Mute)' : 'Audio Muted (Click to Unmute)'}
           aria-label="Toggle Siren"
         >
           {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
 
         {/* Live Telemetry Bar */}
-        <div className="header-telemetry">
-          <div className="telemetry-item">
-            <MapPin size={13} />
-            <span>Bacolod City</span>
+        <div className="telemetry-bar">
+          <div className="telemetry-node">
+            <MapPin size={13} className="text-cyan" />
+            <span>Bacolod City HQ</span>
           </div>
-          <div className="telemetry-divider" />
-          <div className="telemetry-item">
-            <Clock size={13} />
-            <span className="clock-val">{timeString}</span>
+          <div className="telemetry-sep" />
+          <div className="telemetry-node">
+            <Radio size={13} className="text-emerald" />
+            <span>Ping: <strong>14ms</strong></span>
+          </div>
+          <div className="telemetry-sep" />
+          <div className="telemetry-node">
+            <Clock size={13} className="text-amber" />
+            <strong>{timeString}</strong>
           </div>
         </div>
 
-        {/* Connection Status Pill */}
-        <div className={`connection-pill ${isConnected ? 'online' : 'offline'}`}>
-          {isConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
+        {/* Connection Indicator */}
+        <div className={`connection-indicator ${isConnected ? 'online' : 'offline'}`}>
+          {isConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
           <span>{isConnected ? 'Telemetry Online' : 'Connecting...'}</span>
         </div>
       </div>

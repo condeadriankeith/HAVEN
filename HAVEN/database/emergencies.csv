@@ -1,1 +1,2 @@
 emergencyId,userId,userName,userPhone,userEmail,userPets,latitude,longitude,address,emergencyType,status,reportedAt,respondedAt,resolvedAt,assignedResponderId,notes,createdAt,updatedAt
+EMG-0001,USR-0001,Admin User,123-456-7890,admin@example.com,[],10.6812,122.955,Bacolod City Plaza,Pet Respiratory Distress,RESPONDED,2026-09-04T11:25:17.458Z,,,,Dog struggling to breathe near park,2026-09-04T11:25:17.458Z,2026-09-04T11:25:19.708Z

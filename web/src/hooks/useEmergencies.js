@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { socketService } from '../services/socket';
 import {
   fetchActiveEmergencies,
@@ -7,12 +7,17 @@ import {
   fetchEmergencyStatistics,
 } from '../services/api';
 import { decodePolyline } from '../utils/polyline';
-import { playEmergencyAlarm, playSuccessChime } from '../utils/sound';
+import {
+  playEmergencyAlarm,
+  playSuccessChime,
+  playClickFeedback,
+  playRadarBlip,
+} from '../utils/sound';
 
 export const DEFAULT_VET_LAT = 10.6765;
 export const DEFAULT_VET_LNG = 122.9509;
 
-// Extracts latitude and longitude from varied backend formats
+// Extracts coordinates reliably from multiple backend formats
 export function extractCoordinates(data) {
   let lat = DEFAULT_VET_LAT;
   let lng = DEFAULT_VET_LNG;
@@ -36,7 +41,7 @@ export function extractCoordinates(data) {
   return { lat, lng };
 }
 
-// Formats raw emergency record into unified structure
+// Formats raw emergency data into tactical unified structure
 export function formatEmergency(raw) {
   const coords = extractCoordinates(raw);
   const id = raw.emergencyId || raw.id || `EMG-${Date.now().toString().slice(-4)}`;
@@ -56,6 +61,13 @@ export function formatEmergency(raw) {
   );
   const emergencyFee = Math.max(150, Math.round(distKm * 60) + 120);
 
+  // Determine severity tier
+  let severity = 'URGENT';
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.includes('respiratory') || lowerTitle.includes('shock') || lowerTitle.includes('trauma') || lowerTitle.includes('bleeding')) {
+    severity = 'CRITICAL';
+  }
+
   return {
     id,
     title,
@@ -67,6 +79,7 @@ export function formatEmergency(raw) {
     lat: coords.lat,
     lng: coords.lng,
     status,
+    severity,
     distanceKm: parseFloat(distKm.toFixed(2)),
     emergencyFee,
     reportedAt,
@@ -78,8 +91,9 @@ export function useEmergencies() {
   const [emergencies, setEmergencies] = useState([]);
   const [selectedEmergency, setSelectedEmergency] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [routeInfo, setRouteInfo] = useState(null); // { distanceKm, durationMin }
+  const [routeInfo, setRouteInfo] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [toasts, setToasts] = useState([]);
   const [stats, setStats] = useState({
     totalReports: 0,
     activeReports: 0,
@@ -91,15 +105,43 @@ export function useEmergencies() {
     return localStorage.getItem('haven_sound_enabled') !== 'false';
   });
 
+  const toastTimerRef = useRef({});
+
+  // Toast management
+  const addToast = useCallback((toast) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const newToast = { id, duration: 4500, ...toast };
+    setToasts((prev) => [newToast, ...prev.slice(0, 3)]);
+
+    toastTimerRef.current[id] = setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+      delete toastTimerRef.current[id];
+    }, newToast.duration);
+  }, []);
+
+  const dismissToast = useCallback((id) => {
+    if (toastTimerRef.current[id]) {
+      clearTimeout(toastTimerRef.current[id]);
+      delete toastTimerRef.current[id];
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   const toggleSound = () => {
     setSoundEnabled((prev) => {
       const next = !prev;
       localStorage.setItem('haven_sound_enabled', String(next));
+      if (next) playClickFeedback();
+      addToast({
+        type: 'info',
+        title: next ? 'Tactical Audio Siren Active' : 'Tactical Audio Muted',
+        message: next ? 'Auditory sirens will sound on incoming SOS' : 'Siren muted',
+      });
       return next;
     });
   };
 
-  // Fetch initial data & stats
+  // Load initial records
   const loadData = useCallback(async () => {
     const rawList = await fetchActiveEmergencies();
     if (Array.isArray(rawList)) {
@@ -135,9 +177,16 @@ export function useEmergencies() {
     if (soundEnabled) {
       playEmergencyAlarm();
     }
-  }, [soundEnabled]);
 
-  // Handle emergency status update from server
+    addToast({
+      type: 'emergency',
+      title: `SOS: ${formatted.title}`,
+      message: `${formatted.owner} reported incident at ${formatted.distanceKm}km away.`,
+      duration: 6000,
+    });
+  }, [soundEnabled, addToast]);
+
+  // Handle emergency status updates
   const handleStatusChange = useCallback((raw) => {
     const updated = formatEmergency(raw);
     if (updated.status === 'RESPONDED' || updated.status === 'RESOLVED') {
@@ -156,12 +205,24 @@ export function useEmergencies() {
       if (soundEnabled) {
         playSuccessChime();
       }
+
+      addToast({
+        type: 'success',
+        title: 'Incident Dispatched & Acknowledged',
+        message: `${updated.id} marked as responded.`,
+      });
     }
-  }, [soundEnabled]);
+  }, [soundEnabled, addToast]);
 
   // Socket setup
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+    const init = async () => {
+      if (isMounted) {
+        await loadData();
+      }
+    };
+    init();
 
     socketService.connect((connected) => {
       setIsConnected(connected);
@@ -182,6 +243,8 @@ export function useEmergencies() {
 
   // Select emergency and calculate route
   const selectEmergency = async (emergency) => {
+    if (soundEnabled) playRadarBlip();
+
     if (selectedEmergency?.id === emergency.id) {
       setSelectedEmergency(null);
       setRouteCoordinates([]);
@@ -213,7 +276,6 @@ export function useEmergencies() {
         durationMin: routeRes.duration ? Math.ceil(routeRes.duration / 60) : Math.ceil(emergency.distanceKm * 2.5),
       });
     } else {
-      // Fallback straight line
       setRouteCoordinates([
         [DEFAULT_VET_LAT, DEFAULT_VET_LNG],
         [emergency.lat, emergency.lng],
@@ -225,8 +287,10 @@ export function useEmergencies() {
     }
   };
 
-  // Mark emergency as responded
+  // Mark responded
   const markResponded = async (emergency) => {
+    if (soundEnabled) playSuccessChime();
+
     await updateEmergencyStatus(emergency.id, 'RESPONDED');
     socketService.emitStatusUpdate(emergency.id, 'RESPONDED');
 
@@ -243,9 +307,11 @@ export function useEmergencies() {
       resolvedReports: prev.resolvedReports + 1,
     }));
 
-    if (soundEnabled) {
-      playSuccessChime();
-    }
+    addToast({
+      type: 'success',
+      title: 'Unit Dispatched',
+      message: `Rescue team assigned to incident ${emergency.id}.`,
+    });
   };
 
   return {
@@ -254,11 +320,15 @@ export function useEmergencies() {
     routeCoordinates,
     routeInfo,
     isConnected,
+    toasts,
     stats,
     soundEnabled,
+    hasUnattendedAlert: emergencies.some((e) => e.status === 'ACTIVE'),
     toggleSound,
     selectEmergency,
     markResponded,
+    dismissToast,
+    addToast,
     reload: loadData,
   };
 }

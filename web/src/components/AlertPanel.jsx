@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   Compass,
 } from 'lucide-react';
+import { playClickFeedback } from '../utils/sound';
 
 const AlertPanel = ({
   emergencies = [],
@@ -22,6 +23,7 @@ const AlertPanel = ({
 
   const toggleExpand = (id, e) => {
     e.stopPropagation();
+    playClickFeedback();
     setExpandedIds((prev) => ({
       ...prev,
       [id]: !prev[id],
@@ -37,7 +39,7 @@ const AlertPanel = ({
           const name = p.name || 'Pet';
           const breed = p.breed ? `${p.breed}` : `${p.type || 'Unknown'}`;
           return (
-            <span key={idx} className="pet-pill">
+            <span key={idx} className="pet-tag">
               {name} ({breed})
             </span>
           );
@@ -45,83 +47,89 @@ const AlertPanel = ({
       }
     } catch {
       if (typeof petsJson === 'string' && petsJson.trim().length > 0) {
-        return <span className="pet-pill">{petsJson}</span>;
+        return <span className="pet-tag">{petsJson}</span>;
       }
     }
     return null;
   };
 
   return (
-    <aside className="haven-alert-panel" aria-label="Incoming Emergencies Feed">
-      <div className="alert-panel-header">
-        <div className="alert-title-wrap">
+    <aside className="haven-alert-panel" aria-label="Incoming Emergency Incidents">
+      <div className="panel-top-bar">
+        <div className="panel-title-group">
           <AlertTriangle size={18} className="text-red" />
-          <h2>Emergency Incident Feed</h2>
+          <h2>Emergency Stream</h2>
         </div>
-        <span className="alert-count-badge">
-          {emergencies.length} Active
-        </span>
+        <div className="badge-live-count">
+          <span className="ticker-dot" style={{ width: 5, height: 5 }} />
+          <span>{emergencies.length} Active Incidents</span>
+        </div>
       </div>
 
-      <div className="alert-list-scroll">
+      <div className="alert-cards-scroll">
         {emergencies.length === 0 ? (
           <div className="empty-alerts">
-            <CheckCircle2 size={44} className="empty-icon" />
-            <h3>No Active Emergencies</h3>
-            <p>All emergency incidents in Bacolod City have been acknowledged and processed.</p>
+            <CheckCircle2 size={46} className="text-emerald" style={{ marginBottom: 14 }} />
+            <h3>Sector All Clear</h3>
+            <p>No active emergencies reported across Bacolod City jurisdiction.</p>
           </div>
         ) : (
-          emergencies.map((alert) => {
+          emergencies.map((alert, idx) => {
             const isSelected = selectedEmergency && selectedEmergency.id === alert.id;
             const isExpanded = !!expandedIds[alert.id];
             const petsElements = parsePets(alert.pets);
+            const severityClass = alert.severity === 'CRITICAL' ? 'critical' : 'urgent';
 
             return (
               <article
                 key={alert.id}
-                className={`alert-card ${isSelected ? 'selected' : ''}`}
+                className={`incident-card ${isSelected ? 'selected' : ''}`}
+                style={{ animationDelay: `${idx * 0.06}s` }}
                 onClick={() => onSelectEmergency(alert)}
                 role="button"
                 tabIndex={0}
               >
-                <div className="card-top">
-                  <div className="card-header-main">
-                    <h3 className="card-title">{alert.title}</h3>
-                    <div className="card-meta-row">
-                      <span className="alert-id">{alert.id}</span>
-                      <span className="distance-badge">
-                        <Compass size={11} style={{ display: 'inline', marginRight: 3 }} />
+                <div className="card-heading-row">
+                  <div className="card-title-meta">
+                    <h3>{alert.title}</h3>
+                    <div className="card-tags">
+                      <span className="badge-id">{alert.id}</span>
+                      <span className={`badge-severity ${severityClass}`}>
+                        {alert.severity}
+                      </span>
+                      <span className="badge-id" style={{ color: 'var(--accent-amber)', background: 'rgba(255, 179, 0, 0.1)' }}>
+                        <Compass size={10} style={{ display: 'inline', marginRight: 3 }} />
                         {alert.distanceKm} km
                       </span>
                     </div>
                   </div>
 
                   <button
-                    className="btn-icon-toggle"
+                    className="btn-icon-tactile"
                     style={{ width: 28, height: 28 }}
                     onClick={(e) => toggleExpand(alert.id, e)}
-                    title={isExpanded ? 'Collapse Details' : 'Expand Details'}
+                    title={isExpanded ? 'Collapse' : 'Expand Details'}
                     aria-label="Toggle details"
                   >
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </button>
                 </div>
 
-                <p className="card-description">
-                  {isExpanded || (alert.description && alert.description.length <= 90)
+                <p className="card-synopsis">
+                  {isExpanded || (alert.description && alert.description.length <= 85)
                     ? alert.description
-                    : `${(alert.description || '').substring(0, 90)}...`}
+                    : `${(alert.description || '').substring(0, 85)}...`}
                 </p>
 
-                <div className="card-details-grid">
-                  <div className="detail-item">
-                    <User size={13} />
-                    <span>Owner: <strong>{alert.owner}</strong></span>
+                <div className="card-data-grid">
+                  <div className="data-row">
+                    <User size={13} className="text-cyan" />
+                    <span>Caller: <strong>{alert.owner}</strong></span>
                   </div>
 
                   {alert.phone && (
-                    <div className="detail-item">
-                      <Phone size={13} />
+                    <div className="data-row">
+                      <Phone size={13} className="text-cyan" />
                       <a href={`tel:${alert.phone}`} onClick={(e) => e.stopPropagation()}>
                         {alert.phone}
                       </a>
@@ -129,38 +137,36 @@ const AlertPanel = ({
                   )}
 
                   {petsElements && (
-                    <div className="detail-item" style={{ flexWrap: 'wrap', gap: 4 }}>
-                      <PawPrint size={13} />
+                    <div className="data-row" style={{ flexWrap: 'wrap', gap: 4 }}>
+                      <PawPrint size={13} className="text-cyan" />
                       <span style={{ marginRight: 4 }}>Pets:</span>
                       {petsElements}
                     </div>
                   )}
 
-                  <div className="detail-item">
-                    <MapPin size={13} />
-                    <span>{alert.lat.toFixed(4)}, {alert.lng.toFixed(4)}</span>
+                  <div className="data-row">
+                    <MapPin size={13} className="text-cyan" />
+                    <span>GPS: {alert.lat.toFixed(4)}, {alert.lng.toFixed(4)}</span>
                   </div>
 
                   {alert.emergencyFee > 0 && (
-                    <div className="detail-item fee-item">
-                      <CircleDollarSign size={13} />
-                      <span>Response Fee: <strong>₱{alert.emergencyFee}</strong></span>
+                    <div className="data-row">
+                      <CircleDollarSign size={13} className="text-emerald" />
+                      <span className="fee-highlight">Est. Fee: ₱{alert.emergencyFee}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="card-actions">
-                  <button
-                    className="btn-respond"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMarkResponded(alert);
-                    }}
-                  >
-                    <CheckCircle2 size={15} />
-                    <span>Mark Responded & Dispatched</span>
-                  </button>
-                </div>
+                <button
+                  className="btn-dispatch-action"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMarkResponded(alert);
+                  }}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>Acknowledge & Dispatch Units</span>
+                </button>
               </article>
             );
           })

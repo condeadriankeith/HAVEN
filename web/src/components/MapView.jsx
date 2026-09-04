@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { Clock, Compass } from 'lucide-react';
+import { Clock, Compass, Crosshair } from 'lucide-react';
 import { DEFAULT_VET_LAT, DEFAULT_VET_LNG } from '../hooks/useEmergencies';
 
 // Fix Leaflet marker asset references
@@ -16,27 +16,31 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// Custom Emergency Animated Radar Pin
-const createEmergencyIcon = (isSelected) => {
+// Custom Sonar Radar Pin with Multi-Ring Ripple Animation
+const createEmergencySonarIcon = (isSelected, type = '') => {
+  const isCat = type.toLowerCase().includes('cat') || type.toLowerCase().includes('feline');
+  const iconSymbol = isCat ? '🐱' : '🚨';
+
   return L.divIcon({
-    className: 'custom-emergency-icon',
+    className: 'custom-emergency-pin',
     html: `
-      <div class="pin-pulse-wrapper ${isSelected ? 'selected' : ''}">
-        <div class="pin-pulse"></div>
-        <div class="pin-marker">🚨</div>
+      <div class="sonar-pin-container ${isSelected ? 'selected' : ''}">
+        <div class="sonar-ripple"></div>
+        <div class="sonar-ripple-outer"></div>
+        <div class="sonar-core">${iconSymbol}</div>
       </div>
     `,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
-    popupAnchor: [0, -20],
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    popupAnchor: [0, -22],
   });
 };
 
-// Custom Vet HQ Pin
-const vetHubIcon = L.divIcon({
-  className: 'custom-vethub-icon',
+// Custom Vet HQ Center Pin
+const vetHqIcon = L.divIcon({
+  className: 'custom-vethub-pin',
   html: `
-    <div class="vethub-marker" title="HAVEN Veterinary Dispatch HQ">
+    <div class="vet-hq-pin" title="HAVEN Central Veterinary Command">
       🏥
     </div>
   `,
@@ -45,14 +49,29 @@ const vetHubIcon = L.divIcon({
   popupAnchor: [0, -18],
 });
 
-// Smooth Camera Controller
-function MapController({ center, zoom }) {
+// Smooth Camera Controller with Ease-Out Lerping
+function MapCameraController({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (center && Array.isArray(center) && center.length === 2) {
-      map.flyTo(center, zoom || 14, { duration: 1.2 });
+      map.flyTo(center, zoom || 14, {
+        duration: 1.4,
+        easeLinearity: 0.25,
+      });
     }
   }, [center, zoom, map]);
+  return null;
+}
+
+// Map Click Listener for Interactive Point Picking
+function MapLocationPicker({ onLocationPicked }) {
+  useMapEvents({
+    click(e) {
+      if (onLocationPicked) {
+        onLocationPicked(e.latlng);
+      }
+    },
+  });
   return null;
 }
 
@@ -64,6 +83,7 @@ const MapView = ({
   routeCoordinates = [],
   routeInfo = null,
   onSelectEmergency,
+  onLocationPicked,
 }) => {
   const mapCenter = selectedEmergency
     ? [selectedEmergency.lat, selectedEmergency.lng]
@@ -71,22 +91,43 @@ const MapView = ({
 
   return (
     <div className="map-view-container">
-      {/* Route Navigation HUD Overlay */}
+      {/* Visual Rotating Radar Sweep Screen Overlay */}
+      <div className="radar-sweep-screen" aria-hidden="true">
+        <div className="radar-circle-grid">
+          <div className="radar-crosshair-x" />
+          <div className="radar-crosshair-y" />
+          <div className="radar-sweep-beam" />
+        </div>
+      </div>
+
+      {/* Floating Tactical Route HUD */}
       {selectedEmergency && routeInfo && (
-        <div className="route-hud-overlay">
-          <div className="hud-metric">
-            <span className="hud-label">Incident Target</span>
-            <span className="hud-target">{selectedEmergency.title}</span>
+        <div className="tactical-route-hud">
+          <div className="hud-stat">
+            <span className="hud-stat-label">
+              <Crosshair size={11} className="text-cyan" /> Incident Target
+            </span>
+            <span className="hud-destination">{selectedEmergency.title}</span>
           </div>
-          <div className="hud-divider" />
-          <div className="hud-metric">
-            <span className="hud-label"><Compass size={11} /> Distance</span>
-            <span className="hud-val">{routeInfo.distanceKm} km</span>
+
+          <div className="hud-divider-line" />
+
+          <div className="hud-stat">
+            <span className="hud-stat-label">
+              <Compass size={11} className="text-amber" /> Distance
+            </span>
+            <span className="hud-stat-value">{routeInfo.distanceKm} km</span>
           </div>
-          <div className="hud-divider" />
-          <div className="hud-metric">
-            <span className="hud-label"><Clock size={11} /> Estimated ETA</span>
-            <span className="hud-val">~{routeInfo.durationMin} min</span>
+
+          <div className="hud-divider-line" />
+
+          <div className="hud-stat">
+            <span className="hud-stat-label">
+              <Clock size={11} className="text-emerald" /> Est. ETA
+            </span>
+            <span className="hud-stat-value" style={{ color: 'var(--accent-emerald)' }}>
+              ~{routeInfo.durationMin} min
+            </span>
           </div>
         </div>
       )}
@@ -97,33 +138,35 @@ const MapView = ({
         scrollWheelZoom={true}
         className="leaflet-map"
       >
-        {/* CartoDB Dark Matter Tiles for Command Center Look */}
+        {/* CartoDB Dark Matter Tiles */}
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          maxZoom={19}
         />
 
-        <MapController center={mapCenter} zoom={selectedEmergency ? 15 : 13} />
+        <MapCameraController center={mapCenter} zoom={selectedEmergency ? 15 : 13} />
+        <MapLocationPicker onLocationPicked={onLocationPicked} />
 
-        {/* HAVEN Vet Dispatch HQ Center */}
-        <Marker position={DEFAULT_CENTER} icon={vetHubIcon}>
+        {/* Central Vet Dispatch Command Center */}
+        <Marker position={DEFAULT_CENTER} icon={vetHqIcon}>
           <Popup>
             <div className="popup-content">
               <h4>🏥 HAVEN Vet Dispatch HQ</h4>
-              <p>Bacolod Central Veterinary Hub</p>
+              <p>Bacolod Central Command Operations</p>
               <p>Coordinates: {DEFAULT_VET_LAT}, {DEFAULT_VET_LNG}</p>
             </div>
           </Popup>
         </Marker>
 
-        {/* Active Emergency Pins */}
+        {/* Sonar Emergency Pins */}
         {emergencies.map((e) => {
           const isSelected = selectedEmergency && selectedEmergency.id === e.id;
           return (
             <Marker
               key={e.id}
               position={[e.lat, e.lng]}
-              icon={createEmergencyIcon(isSelected)}
+              icon={createEmergencySonarIcon(isSelected, e.title)}
               eventHandlers={{
                 click: () => onSelectEmergency(e),
               }}
@@ -133,10 +176,12 @@ const MapView = ({
                   <h4>🚨 {e.title}</h4>
                   <p><strong>ID:</strong> {e.id}</p>
                   <p><strong>Owner:</strong> {e.owner}</p>
-                  <p><strong>Phone:</strong> {e.phone || 'N/A'}</p>
-                  <p><strong>Location:</strong> {e.lat.toFixed(4)}, {e.lng.toFixed(4)}</p>
+                  <p><strong>Contact:</strong> {e.phone || 'N/A'}</p>
+                  <p><strong>Telemetry:</strong> {e.lat.toFixed(4)}, {e.lng.toFixed(4)}</p>
                   {e.emergencyFee > 0 && (
-                    <p className="fee-text"><strong>Est. Response Fee:</strong> ₱{e.emergencyFee}</p>
+                    <p className="fee-text">
+                      <strong>Est. Response Fee:</strong> ₱{e.emergencyFee}
+                    </p>
                   )}
                 </div>
               </Popup>
@@ -144,18 +189,19 @@ const MapView = ({
           );
         })}
 
-        {/* Street Route Polyline with Glow */}
+        {/* Animated Street Route Flowing Line */}
         {routeCoordinates && routeCoordinates.length > 0 && (
           <>
-            {/* Outer glow line */}
+            {/* Outer neon dispersion glow */}
             <Polyline
               positions={routeCoordinates}
-              pathOptions={{ color: '#ff334b', weight: 8, opacity: 0.35 }}
+              pathOptions={{ color: '#00e5ff', weight: 8, opacity: 0.35 }}
             />
-            {/* Inner precise road line */}
+            {/* Inner dynamic animated dashed street line */}
             <Polyline
               positions={routeCoordinates}
-              pathOptions={{ color: '#ff334b', weight: 4, opacity: 0.95 }}
+              className="route-drawing-path"
+              pathOptions={{ color: '#ff2a44', weight: 4.5, opacity: 0.95 }}
             />
           </>
         )}

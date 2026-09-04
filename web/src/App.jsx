@@ -6,6 +6,7 @@ import AlertPanel from './components/AlertPanel';
 import AnalyticsView from './components/AnalyticsView';
 import UsersView from './components/UsersView';
 import SimulateAlertModal from './components/SimulateAlertModal';
+import ToastContainer from './components/ToastContainer';
 import { useEmergencies } from './hooks/useEmergencies';
 import { fetchAllUsers } from './services/api';
 import './App.css';
@@ -14,6 +15,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('map');
   const [users, setUsers] = useState([]);
   const [isSimulateModalOpen, setIsSimulateModalOpen] = useState(false);
+  const [pickedLocation, setPickedLocation] = useState(null);
 
   const {
     emergencies,
@@ -21,32 +23,65 @@ function App() {
     routeCoordinates,
     routeInfo,
     isConnected,
+    toasts,
     stats,
     soundEnabled,
+    hasUnattendedAlert,
     toggleSound,
     selectEmergency,
     markResponded,
+    dismissToast,
+    addToast,
     reload,
   } = useEmergencies();
 
-  // Load user directory
-  const loadUsers = async () => {
-    const userData = await fetchAllUsers();
-    setUsers(userData);
-  };
-
   useEffect(() => {
-    loadUsers();
+    let active = true;
+    fetchAllUsers().then((userData) => {
+      if (active && userData) {
+        setUsers(userData);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  // Sync distress perimeter pulse to root element
+  useEffect(() => {
+    const rootEl = document.getElementById('root');
+    if (rootEl) {
+      if (hasUnattendedAlert) {
+        rootEl.classList.add('emergency-distress-active');
+      } else {
+        rootEl.classList.remove('emergency-distress-active');
+      }
+    }
+  }, [hasUnattendedAlert]);
+
+  // Handle map click location pick
+  const handleMapLocationPicked = (latlng) => {
+    setPickedLocation({ lat: latlng.lat, lng: latlng.lng });
+    addToast({
+      type: 'info',
+      title: 'Target Acquired via Map',
+      message: `Selected GPS: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`,
+    });
+    setIsSimulateModalOpen(true);
+  };
 
   return (
     <div className="haven-app-layout">
-      {/* Command Center Top Navigation */}
+      {/* Tactical Command Center Header */}
       <Header
         isConnected={isConnected}
         soundEnabled={soundEnabled}
+        activeCount={emergencies.length}
         onToggleSound={toggleSound}
-        onOpenSimulateModal={() => setIsSimulateModalOpen(true)}
+        onOpenSimulateModal={() => {
+          setPickedLocation(null);
+          setIsSimulateModalOpen(true);
+        }}
       />
 
       <div className="haven-main-body">
@@ -67,6 +102,7 @@ function App() {
                 routeCoordinates={routeCoordinates}
                 routeInfo={routeInfo}
                 onSelectEmergency={selectEmergency}
+                onLocationPicked={handleMapLocationPicked}
               />
               <AlertPanel
                 emergencies={emergencies}
@@ -90,14 +126,21 @@ function App() {
         </main>
       </div>
 
-      {/* SOS Emergency Simulator Modal */}
+      {/* Interactive Emergency Dispatch Simulator */}
       <SimulateAlertModal
         isOpen={isSimulateModalOpen}
-        onClose={() => setIsSimulateModalOpen(false)}
+        customLocation={pickedLocation}
+        onClose={() => {
+          setIsSimulateModalOpen(false);
+          setPickedLocation(null);
+        }}
         onAlertDispatched={() => {
           reload();
         }}
       />
+
+      {/* Floating Tactical Toast HUD */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

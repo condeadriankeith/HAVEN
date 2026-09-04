@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Luxury Slate / Obsidian Palette matching Reference Images */
+  --bg-canvas-outer: #12151e;
+  --bg-frame: #0d1017;
+  --bg-surface: #131824;
+  --bg-surface-elevated: #1a2030;
+  --bg-card: rgba(19, 24, 36, 0.85);
+  --bg-card-hover: rgba(26, 33, 50, 0.95);
+  --bg-glass: rgba(16, 21, 32, 0.78);
+  --bg-glass-frosted: rgba(25, 32, 48, 0.65);
+
+  /* Precise, tinted borders */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-highlight: rgba(0, 240, 168, 0.35);
+
+  /* High-contrast typography */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+
+  /* Intentional Accents matching References */
+  --accent-mint: #00f0a8;
+  --accent-mint-hover: #00d293;
+  --accent-mint-glow: rgba(0, 240, 168, 0.45);
+
+  --accent-cyan: #00e5ff;
+  --accent-cyan-hover: #00bfe6;
+  --accent-cyan-glow: rgba(0, 229, 255, 0.35);
+
+  --accent-crimson: #ff2a44;
+  --accent-crimson-hover: #e01f37;
+  --accent-crimson-glow: rgba(255, 42, 68, 0.4);
+
+  --accent-amber: #ffb300;
+  --accent-amber-glow: rgba(255, 179, 0, 0.3);
+
+  --accent-emerald: #00f090;
+
+  /* Type Scales */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Natural Apple/Framer-grade Spring Easing */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg-canvas-outer);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Screen Perimeter Emergency Distress Pulse */
+#root.emergency-distress-active::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border: 3px solid var(--accent-crimson);
+  box-shadow: inset 0 0 45px var(--accent-crimson-glow);
+  animation: distress-vignette-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes distress-vignette-pulse {
+  0% { opacity: 0.25; }
+  50% { opacity: 0.85; }
+  100% { opacity: 0.25; }
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

@@ -9,21 +9,23 @@ class SocketService {
     this.onEmergencyCallback = null;
     this.onStatusCallback = null;
     this.onConnectionChangeCallback = null;
+    this.isConnected = false;
   }
 
   connect(onConnectionChange) {
     this.onConnectionChangeCallback = onConnectionChange;
 
-    // Connect using Socket.IO
+    // Connect via Socket.IO
     this.socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1500,
+      timeout: 10000,
     });
 
     this.socket.on('connect', () => {
-      console.log('Socket.IO connected:', this.socket.id);
+      this.isConnected = true;
       if (this.onConnectionChangeCallback) {
         this.onConnectionChangeCallback(true);
       }
@@ -31,14 +33,21 @@ class SocketService {
     });
 
     this.socket.on('disconnect', () => {
-      console.log('Socket.IO disconnected');
+      this.isConnected = false;
+      if (this.onConnectionChangeCallback) {
+        this.onConnectionChangeCallback(false);
+      }
+    });
+
+    this.socket.on('connect_error', (err) => {
+      console.warn('Socket.IO connection notice:', err.message);
+      this.isConnected = false;
       if (this.onConnectionChangeCallback) {
         this.onConnectionChangeCallback(false);
       }
     });
 
     this.socket.on('new-emergency-alert', (data) => {
-      console.log('Socket.IO new emergency alert:', data);
       const emergency = data.emergency || data;
       if (this.onEmergencyCallback) {
         this.onEmergencyCallback(emergency);
@@ -46,14 +55,13 @@ class SocketService {
     });
 
     this.socket.on('emergency-status-changed', (data) => {
-      console.log('Socket.IO status update:', data);
       const emergency = data.emergency || data;
       if (this.onStatusCallback) {
         this.onStatusCallback(emergency);
       }
     });
 
-    // Fallback native WebSocket connection
+    // Also connect native WebSocket as backup
     this.connectNativeWs();
   }
 
@@ -63,7 +71,6 @@ class SocketService {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('Native WebSocket connected');
         this.ws.send(JSON.stringify({ type: 'subscribe-emergency-alerts' }));
       };
 
@@ -75,16 +82,12 @@ class SocketService {
           } else if (data.type === 'emergency-status-changed' && this.onStatusCallback) {
             this.onStatusCallback(data.emergency || data);
           }
-        } catch (e) {
-          console.error('Error parsing native WS message:', e);
+        } catch {
+          // Non-JSON or heartbeats
         }
       };
-
-      this.ws.onclose = () => {
-        console.log('Native WebSocket closed');
-      };
-    } catch (err) {
-      console.error('Failed to connect native WS:', err);
+    } catch {
+      // WS fallback optional
     }
   }
 

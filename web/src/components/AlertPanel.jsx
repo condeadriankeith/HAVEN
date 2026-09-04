@@ -1,7 +1,23 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, CheckCircle, Phone, User, PawPrint, MapPin, DollarSign } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  Phone,
+  User,
+  PawPrint,
+  MapPin,
+  CircleDollarSign,
+  Compass,
+} from 'lucide-react';
 
-const AlertPanel = ({ emergencies, selectedEmergency, onSelectEmergency, onMarkResponded }) => {
+const AlertPanel = ({
+  emergencies = [],
+  selectedEmergency = null,
+  onSelectEmergency,
+  onMarkResponded,
+}) => {
   const [expandedIds, setExpandedIds] = useState({});
 
   const toggleExpand = (id, e) => {
@@ -17,98 +33,118 @@ const AlertPanel = ({ emergencies, selectedEmergency, onSelectEmergency, onMarkR
     try {
       const parsed = typeof petsJson === 'string' ? JSON.parse(petsJson) : petsJson;
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
-          .map((p) => {
-            const name = p.name || 'Unknown';
-            const breed = p.breed ? ` (${p.breed} ${p.type || ''})` : ` (${p.type || 'Pet'})`;
-            return `${name}${breed}`;
-          })
-          .join(', ');
+        return parsed.map((p, idx) => {
+          const name = p.name || 'Pet';
+          const breed = p.breed ? `${p.breed}` : `${p.type || 'Unknown'}`;
+          return (
+            <span key={idx} className="pet-pill">
+              {name} ({breed})
+            </span>
+          );
+        });
       }
-    } catch (err) {
-      if (typeof petsJson === 'string' && petsJson.trim().length > 0) return petsJson;
+    } catch {
+      if (typeof petsJson === 'string' && petsJson.trim().length > 0) {
+        return <span className="pet-pill">{petsJson}</span>;
+      }
     }
     return null;
   };
 
   return (
-    <aside className="haven-alert-panel">
+    <aside className="haven-alert-panel" aria-label="Incoming Emergencies Feed">
       <div className="alert-panel-header">
         <div className="alert-title-wrap">
-          <AlertTriangle size={20} className="alert-icon" />
-          <h2>Recent Emergency Alerts</h2>
+          <AlertTriangle size={18} className="text-red" />
+          <h2>Emergency Incident Feed</h2>
         </div>
-        <span className="badge-count">{emergencies.length} Active</span>
+        <span className="alert-count-badge">
+          {emergencies.length} Active
+        </span>
       </div>
 
       <div className="alert-list-scroll">
         {emergencies.length === 0 ? (
           <div className="empty-alerts">
-            <CheckCircle size={40} className="empty-icon" />
-            <p>No active emergencies reported.</p>
-            <small>New incoming SOS alerts will appear here in real time.</small>
+            <CheckCircle2 size={44} className="empty-icon" />
+            <h3>No Active Emergencies</h3>
+            <p>All emergency incidents in Bacolod City have been acknowledged and processed.</p>
           </div>
         ) : (
           emergencies.map((alert) => {
             const isSelected = selectedEmergency && selectedEmergency.id === alert.id;
             const isExpanded = !!expandedIds[alert.id];
-            const petsDisplay = parsePets(alert.pets);
+            const petsElements = parsePets(alert.pets);
 
             return (
-              <div
+              <article
                 key={alert.id}
                 className={`alert-card ${isSelected ? 'selected' : ''}`}
                 onClick={() => onSelectEmergency(alert)}
+                role="button"
+                tabIndex={0}
               >
                 <div className="card-top">
                   <div className="card-header-main">
-                    <h3 className="card-title">{alert.title || alert.emergencyType}</h3>
-                    <span className="alert-id">{alert.id}</span>
+                    <h3 className="card-title">{alert.title}</h3>
+                    <div className="card-meta-row">
+                      <span className="alert-id">{alert.id}</span>
+                      <span className="distance-badge">
+                        <Compass size={11} style={{ display: 'inline', marginRight: 3 }} />
+                        {alert.distanceKm} km
+                      </span>
+                    </div>
                   </div>
+
                   <button
-                    className="btn-icon expand-btn"
+                    className="btn-icon-toggle"
+                    style={{ width: 28, height: 28 }}
                     onClick={(e) => toggleExpand(alert.id, e)}
-                    title={isExpanded ? 'Collapse' : 'Expand'}
+                    title={isExpanded ? 'Collapse Details' : 'Expand Details'}
+                    aria-label="Toggle details"
                   >
-                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
                 </div>
 
                 <p className="card-description">
-                  {isExpanded || (alert.description && alert.description.length <= 80)
+                  {isExpanded || (alert.description && alert.description.length <= 90)
                     ? alert.description
-                    : `${(alert.description || '').substring(0, 80)}...`}
+                    : `${(alert.description || '').substring(0, 90)}...`}
                 </p>
 
-                <div className="card-details">
+                <div className="card-details-grid">
                   <div className="detail-item">
-                    <User size={14} />
-                    <span>Reported by: <strong>{alert.owner || alert.userName || 'Anonymous'}</strong></span>
+                    <User size={13} />
+                    <span>Owner: <strong>{alert.owner}</strong></span>
                   </div>
 
-                  {alert.contactInfo && (
+                  {alert.phone && (
                     <div className="detail-item">
-                      <Phone size={14} />
-                      <span>{alert.contactInfo}</span>
+                      <Phone size={13} />
+                      <a href={`tel:${alert.phone}`} onClick={(e) => e.stopPropagation()}>
+                        {alert.phone}
+                      </a>
                     </div>
                   )}
 
-                  {petsDisplay && (
-                    <div className="detail-item pets-item">
-                      <PawPrint size={14} />
-                      <span>Pets: <strong>{petsDisplay}</strong></span>
+                  {petsElements && (
+                    <div className="detail-item" style={{ flexWrap: 'wrap', gap: 4 }}>
+                      <PawPrint size={13} />
+                      <span style={{ marginRight: 4 }}>Pets:</span>
+                      {petsElements}
                     </div>
                   )}
 
                   <div className="detail-item">
-                    <MapPin size={14} />
-                    <span>Location: {alert.lat.toFixed(4)}, {alert.lng.toFixed(4)}</span>
+                    <MapPin size={13} />
+                    <span>{alert.lat.toFixed(4)}, {alert.lng.toFixed(4)}</span>
                   </div>
 
                   {alert.emergencyFee > 0 && (
                     <div className="detail-item fee-item">
-                      <DollarSign size={14} />
-                      <span>Emergency Fee: <strong>₱{alert.emergencyFee}</strong></span>
+                      <CircleDollarSign size={13} />
+                      <span>Response Fee: <strong>₱{alert.emergencyFee}</strong></span>
                     </div>
                   )}
                 </div>
@@ -121,11 +157,11 @@ const AlertPanel = ({ emergencies, selectedEmergency, onSelectEmergency, onMarkR
                       onMarkResponded(alert);
                     }}
                   >
-                    <CheckCircle size={16} />
-                    <span>Mark Responded</span>
+                    <CheckCircle2 size={15} />
+                    <span>Mark Responded & Dispatched</span>
                   </button>
                 </div>
-              </div>
+              </article>
             );
           })
         )}

@@ -1,35 +1,40 @@
 import React from 'react';
-import { Map, BarChart3, Users } from 'lucide-react';
+import { Radar, BarChart3, Users } from 'lucide-react';
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, activeAlertCount }) => {
   return (
-    <nav className="haven-sidebar">
+    <nav className="haven-sidebar" aria-label="Main Navigation">
       <div className="sidebar-menu">
         <button
-          className={`sidebar-btn ${activeTab === 'map' ? 'active' : ''}`}
+          className={`sidebar-nav-btn ${activeTab === 'map' ? 'active' : ''}`}
           onClick={() => setActiveTab('map')}
-          title="Map View"
+          title="Live Incident Radar & Map"
         >
-          <Map size={24} />
-          <span className="btn-label">Map</span>
+          <Radar size={22} />
+          {activeAlertCount > 0 && (
+            <span className="brand-badge" style={{ position: 'absolute', top: 4, right: 4, fontSize: '0.6rem', padding: '1px 4px' }}>
+              {activeAlertCount}
+            </span>
+          )}
+          <span className="nav-label">Radar</span>
         </button>
 
         <button
-          className={`sidebar-btn ${activeTab === 'analytics' ? 'active' : ''}`}
+          className={`sidebar-nav-btn ${activeTab === 'analytics' ? 'active' : ''}`}
           onClick={() => setActiveTab('analytics')}
-          title="Analytics"
+          title="Operational Analytics & Response Metrics"
         >
-          <BarChart3 size={24} />
-          <span className="btn-label">Analytics</span>
+          <BarChart3 size={22} />
+          <span className="nav-label">Analytics</span>
         </button>
 
         <button
-          className={`sidebar-btn ${activeTab === 'users' ? 'active' : ''}`}
+          className={`sidebar-nav-btn ${activeTab === 'users' ? 'active' : ''}`}
           onClick={() => setActiveTab('users')}
-          title="Users Directory"
+          title="Directory of Pet Owners & Responders"
         >
-          <Users size={24} />
-          <span className="btn-label">Users</span>
+          <Users size={22} />
+          <span className="nav-label">Directory</span>
         </button>
       </div>
     </nav>
